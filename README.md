@@ -43,7 +43,13 @@ Nieobsługiwane (z jasnym komunikatem i przyciskiem „Otwórz w innej aplikacji
 - `android/app/src/main/assets/web/` – przeglądarki (HTML/JS), po jednej na rodzaj pliku.
   Plik podawany jest stronie pod adresem `https://appassets.androidplatform.net/file/…`
   bezpośrednio z telefonu; dokumenty nie mogą niczego pobierać z internetu.
-- `.github/workflows/android.yml` – budowanie APK na GitHubie.
+- `.github/workflows/android.yml` – budowanie na GitHubie: APK do instalacji (Releases)
+  i AAB dla Google Play (artefakt `czytnik-plikow-aab` w zakładce Actions).
+- Cel: Android 16 (targetSdk 36) – wymóg Google Play od 31.08.2026. Wstecz działa przez
+  `OnBackInvokedCallback` (predictive back), a ekran odsuwa się od pasków systemowych
+  (edge-to-edge od Androida 15).
+- Bezpieczeństwo stron: każda strona ma Content-Security-Policy (tylko skrypty z aplikacji,
+  bez skryptów inline), a otwierany plik jest podawany z nagłówkiem `sandbox`.
 
 ### Biblioteki (open source, w `assets/web/lib`)
 
@@ -54,5 +60,7 @@ Nieobsługiwane (z jasnym komunikatem i przyciskiem „Otwórz w innej aplikacji
 - [DOMPurify](https://github.com/cure53/DOMPurify) 3.5 (Apache 2.0 / MPL 2.0) – usuwanie skryptów z HTML i e-maili
 - [marked](https://marked.js.org) 18 (MIT) – Markdown
 - [dxf-parser](https://github.com/gdsestimating/dxf-parser) 1.1 (MIT) – odczyt plików DXF
+
+Pełne teksty licencji: `assets/web/lib/THIRD_PARTY_LICENSES.txt` (w aplikacji: ⋮ → O aplikacji → Licencje).
 
 Własne konwertery: ODT/ODP, RTF, PPTX, MIME (e-maile), KSeF, e-sprawozdania, XML jako dokument, EPUB, rysowanie DXF.

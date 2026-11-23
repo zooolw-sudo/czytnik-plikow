@@ -2,6 +2,7 @@
 <html lang="pl">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' blob: data:; media-src 'self' blob: data:; connect-src 'self' blob: data:; worker-src 'self' blob:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Dokument</title>
 <link rel="stylesheet" href="common.css">
@@ -13,34 +14,6 @@
 <script src="lib/jszip.min.js"></script>
 <script src="lib/docx-preview.min.js"></script>
 <script src="docview.js"></script>
-<script>
-  DocView.start({
-    label: 'Dokument Word',
-    async render(data, el, mode) {
-      await docx.renderAsync(data, el, null, {
-        className: 'docx',
-        inWrapper: true,
-        ignoreWidth: mode === 'read',
-        ignoreHeight: mode === 'read',
-        breakPages: mode !== 'read',
-        ignoreLastRenderedPageBreak: mode === 'read',
-        experimental: true,
-        renderHeaders: mode !== 'read',
-        renderFooters: mode !== 'read',
-        renderFootnotes: true,
-        renderEndnotes: true,
-        renderChanges: false,
-        renderComments: false,
-        useBase64URL: false,
-      });
-      // punktory z czcionek Symbol/Wingdings (prywatne kody Unicode) zamieniamy na zwykłe znaki
-      const PUA = { '\uf0b7': '•', '\uf0a7': '▪', '\uf0d8': '➢', '\uf0fc': '✓', '\uf076': '❖', '\uf06e': '■', '\uf071': '❑', '\uf0a8': '□' };
-      for (const s of el.querySelectorAll('style')) {
-        if (/[\uf000-\uf0ff]/.test(s.textContent)) s.textContent = s.textContent.replace(/[\uf000-\uf0ff]/g, (c) => PUA[c] || '•');
-      }
-      return el.querySelectorAll('section.docx').length;
-    },
-  });
-</script>
+<script src="docx.page.js"></script>
 </body>
 </html>

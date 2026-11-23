@@ -156,11 +156,18 @@ const UI = {
   },
 
   /* ---------- nakładki zamykane przyciskiem Wstecz ---------- */
+  /** Informuje część Android, czy Wstecz ma najpierw zamknąć nakładkę (Android 13+). */
+  syncBack() {
+    if (Bridge && Bridge.setOverlayOpen) Bridge.setOverlayOpen(this.overlays.length > 0);
+  },
+
   pushOverlay(close) {
     this.overlays.push(close);
+    this.syncBack();
     return () => {
       const i = this.overlays.indexOf(close);
       if (i >= 0) this.overlays.splice(i, 1);
+      this.syncBack();
     };
   },
 
@@ -426,7 +433,7 @@ document.addEventListener('click', (e) => {
 /** Obsługa przycisku Wstecz telefonu – wywoływana z części Android. */
 window.handleBack = function () {
   const close = UI.overlays.pop();
-  if (close) { close(); return true; }
+  if (close) { close(); UI.syncBack(); return true; }
   if (window.onBackExtra && window.onBackExtra()) return true;
   return false;
 };

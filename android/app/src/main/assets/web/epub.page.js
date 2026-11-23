@@ -1,0 +1,270 @@
+/* Skrypt strony epub.html (wydzielony z HTML – Content-Security-Policy blokuje skrypty inline). */
+  'use strict';
+  /*
+   * Czytnik e-booków EPUB (2 i 3): wszystkie rozdziały jeden pod drugim, spis treści,
+   * pamiętanie miejsca, tryb nocny, tekst większy/mniejszy gestem dwóch palców.
+   */
+  const main = document.getElementById('main');
+  const box = document.getElementById('box');
+  const key = 'epubpos:' + FILE.name + ':' + FILE.size;
+  let zip, opfDir = '', spine = [], toc = [], meta = {}, root = null, search = null, finder = null;
+  let night = UI.store.get('epubNight', false);
+  const zp = new ZoomPane(main, box, { min: 0.6, max: 3, fit: () => 1, onChange: (z) => UI.store.set('epubZoom', z) });
+
+  const BOOK_CSS = (dark) => `
+    :host { background: transparent; color: ${dark ? '#ddd6c8' : '#2a2620'}; font: 17px/1.62 Georgia, "Noto Serif", serif; }
+    .content { padding: 4px 18px 60px; max-width: 720px; margin: 0 auto; background: transparent !important; }
+    section.ch { content-visibility: auto; contain-intrinsic-size: auto 1500px; }
+    section.ch + section.ch { border-top: 1px solid ${dark ? '#2c3038' : '#e7e0d2'}; margin-top: 28px; padding-top: 18px; }
+    img, svg { max-width: 100% !important; height: auto !important; }
+    a { color: ${dark ? '#8fb4ff' : '#2b5fc4'}; }
+    p { margin: 0 0 .7em; }
+    ${dark ? '* { color: inherit !important; background-color: transparent !important; }' : ''}
+  `;
+
+  const dirOf = (p) => (p.includes('/') ? p.slice(0, p.lastIndexOf('/') + 1) : '');
+  function resolve(base, rel) {
+    if (/^[a-z]+:/i.test(rel)) return rel;
+    const parts = (dirOf(base) + rel.split('#')[0]).split('/');
+    const out = [];
+    for (const p of parts) { if (p === '..') out.pop(); else if (p !== '.' && p !== '') out.push(p); }
+    return decodeURIComponent(out.join('/'));
+  }
+  const xml = async (path) => {
+    const f = zip.file(path);
+    if (!f) return null;
+    const t = await f.async('string');
+    let d = new DOMParser().parseFromString(t, 'application/xhtml+xml');
+    if (d.getElementsByTagName('parsererror').length) d = new DOMParser().parseFromString(t, 'text/html');
+    return d;
+  };
+  const byLocal = (d, name) => Array.from(d.getElementsByTagName('*')).filter((e) => e.localName === name);
+
+  const blobs = new Map();
+  async function blobFor(path, type) {
+    if (blobs.has(path)) return blobs.get(path);
+    const f = zip.file(path);
+    if (!f) return null;
+    const url = URL.createObjectURL(new Blob([await f.async('uint8array')], { type: type || '' }));
+    blobs.set(path, url);
+    return url;
+  }
+
+  async function load() {
+    zip = await JSZip.loadAsync(await UI.fetchFile());
+    const enc = zip.file('META-INF/encryption.xml');
+    if (enc) {
+      const t = await enc.async('string');
+      const refs = [...t.matchAll(/URI="([^"]+)"/g)].map((m) => m[1]);
+      if (refs.some((r) => /\.(x?html?|xml)$/i.test(r))) throw new Error('DRM');
+    }
+    const cont = await xml('META-INF/container.xml');
+    const rf = cont && byLocal(cont, 'rootfile')[0];
+    if (!rf) throw new Error('Brak opisu e-booka (container.xml)');
+    const opfPath = rf.getAttribute('full-path');
+    opfDir = dirOf(opfPath);
+    const opf = await xml(opfPath);
+    const m = byLocal(opf, 'metadata')[0];
+    const dc = (n) => (m ? byLocal(m, n).map((e) => e.textContent.trim()).filter(Boolean) : []);
+    meta = { title: dc('title')[0] || FILE.name, authors: dc('creator'), publisher: dc('publisher')[0], lang: dc('language')[0], date: dc('date')[0] };
+    const items = new Map();
+    for (const it of byLocal(opf, 'item')) {
+      items.set(it.getAttribute('id'), { href: resolve(opfPath, it.getAttribute('href')), type: it.getAttribute('media-type'), props: it.getAttribute('properties') || '' });
+    }
+    const sp = byLocal(opf, 'spine')[0];
+    spine = byLocal(opf, 'itemref').map((r) => items.get(r.getAttribute('idref'))).filter((x) => x && /html|xml/.test(x.type || 'html'));
+    // spis treści: EPUB 3 (nav) albo EPUB 2 (NCX)
+    const navItem = [...items.values()].find((x) => /\bnav\b/.test(x.props));
+    if (navItem) {
+      const nd = await xml(navItem.href);
+      const nav = nd && (byLocal(nd, 'nav').find((n) => /toc/.test(n.getAttribute('epub:type') || n.getAttributeNS('http://www.idpf.org/2007/ops', 'type') || '')) || byLocal(nd, 'nav')[0]);
+      const walk = (ol, lvl) => {
+        for (const li of Array.from(ol ? ol.children : []).filter((e) => e.localName === 'li')) {
+          const a = Array.from(li.children).find((e) => e.localName === 'a' || e.localName === 'span');
+          if (a) toc.push({ title: a.textContent.replace(/\s+/g, ' ').trim(), href: a.getAttribute('href') ? resolve(navItem.href, a.getAttribute('href')) + (a.getAttribute('href').includes('#') ? '#' + a.getAttribute('href').split('#')[1] : '') : null, lvl });
+          const sub = Array.from(li.children).find((e) => e.localName === 'ol');
+          if (sub && lvl < 4) walk(sub, lvl + 1);
+        }
+      };
+      if (nav) walk(Array.from(nav.children).find((e) => e.localName === 'ol'), 0);
+    }
+    if (!toc.length && sp && sp.getAttribute('toc') && items.get(sp.getAttribute('toc'))) {
+      const ncxPath = items.get(sp.getAttribute('toc')).href;
+      const nd = await xml(ncxPath);
+      const walk = (el, lvl) => {
+        for (const np of Array.from(el.children).filter((e) => e.localName === 'navPoint')) {
+          const label = byLocal(np, 'text')[0];
+          const c = byLocal(np, 'content')[0];
+          const src = c ? c.getAttribute('src') : null;
+          toc.push({ title: label ? label.textContent.trim() : '?', href: src ? resolve(ncxPath, src) + (src.includes('#') ? '#' + src.split('#')[1] : '') : null, lvl });
+          if (lvl < 4) walk(np, lvl + 1);
+        }
+      };
+      const map = nd && byLocal(nd, 'navMap')[0];
+      if (map) walk(map, 0);
+    }
+  }
+
+  async function render() {
+    const frag = document.createDocumentFragment();
+    const cssParts = [];
+    const cssDone = new Set();
+    const chapterIndex = new Map(spine.map((s, i) => [s.href, i]));
+    for (let i = 0; i < spine.length; i++) {
+      const it = spine[i];
+      UI.progress(i / spine.length);
+      const d = await xml(it.href);
+      if (!d) continue;
+      // style rozdziału (raz na plik)
+      for (const l of byLocal(d, 'link')) {
+        if (!/stylesheet/i.test(l.getAttribute('rel') || '')) continue;
+        const p = resolve(it.href, l.getAttribute('href') || '');
+        if (cssDone.has(p) || !zip.file(p)) continue;
+        cssDone.add(p);
+        let css = await zip.file(p).async('string');
+        const urls = [...css.matchAll(/url\(\s*['"]?([^'")]+)['"]?\s*\)/g)].map((x) => x[1]);
+        for (const u of urls) {
+          if (/^(data:|https?:)/.test(u)) continue;
+          const b = await blobFor(resolve(p, u));
+          if (b) css = css.split(u).join(b);
+        }
+        cssParts.push(css.replace(/(?<![\w.#-])(html|body)(?![\w-])/gi, '.content'));
+      }
+      for (const st of byLocal(d, 'style')) cssParts.push(st.textContent);
+      const body = byLocal(d, 'body')[0];
+      if (!body) continue;
+      // obrazy: mapujemy oryginalne adresy na dane z archiwum
+      const res = new Map();
+      for (const img of byLocal(body, 'img')) {
+        const src = img.getAttribute('src');
+        if (src && !res.has(src)) { const b = await blobFor(resolve(it.href, src)); if (b) res.set(src, b); }
+      }
+      for (const im of byLocal(body, 'image')) {
+        const src = im.getAttribute('xlink:href') || im.getAttribute('href') || im.getAttributeNS('http://www.w3.org/1999/xlink', 'href');
+        if (src) { const b = await blobFor(resolve(it.href, src)); if (b) { im.setAttribute('href', b); im.removeAttribute('xlink:href'); } }
+      }
+      const html = new XMLSerializer().serializeToString(body).replace(/^<body[^>]*>|<\/body>$/g, '');
+      const { frag: cf } = SafeHtml.sanitize(html, res);
+      const sec = h('section', { class: 'ch', id: 'ch-' + i });
+      // identyfikatory unikalne w całej książce, linki wewnętrzne przepisane
+      for (const el of cf.querySelectorAll('[id]')) el.id = `c${i}-${el.id}`;
+      for (const a of cf.querySelectorAll('a[href]')) {
+        const href = a.getAttribute('href');
+        if (/^(https?:|mailto:)/i.test(href)) continue;
+        const [file, frg] = href.split('#');
+        const target = file ? chapterIndex.get(resolve(it.href, file)) : i;
+        if (target == null) { a.removeAttribute('href'); continue; }
+        a.setAttribute('href', '#' + (frg ? `c${target}-${frg}` : 'ch-' + target));
+      }
+      sec.append(cf);
+      frag.append(sec);
+    }
+    const host = h('div');
+    box.innerHTML = '';
+    box.append(h('div', { class: 'cover' }, h('h1', { text: meta.title }), meta.authors.length ? h('div', { class: 'au', text: meta.authors.join(', ') }) : null), host);
+    root = SafeHtml.mount(host, frag, cssParts.join('\n') + '/*BOOK*/' + BOOK_CSS(night));
+    search = new DomSearch(root, main);
+  }
+
+  function applyNight() {
+    document.body.classList.toggle('night', night);
+    if (root) root.querySelector('style').textContent = root.querySelector('style').textContent.replace(/\/\*BOOK\*\/[\s\S]*$/, '') + '/*BOOK*/' + BOOK_CSS(night);
+  }
+
+  /* ---------- pozycja czytania ---------- */
+  function currentChapter() {
+    if (!root) return 0;
+    const secs = root.querySelectorAll('section.ch');
+    const top = main.getBoundingClientRect().top + 60;
+    let idx = 0;
+    for (const s of secs) { if (s.getBoundingClientRect().top <= top) idx = Number(s.id.slice(3)); else break; }
+    return idx;
+  }
+  let saveT = null;
+  main.addEventListener('scroll', () => {
+    clearTimeout(saveT);
+    saveT = setTimeout(() => {
+      const ch = currentChapter();
+      const sec = root && root.getElementById('ch-' + ch);
+      if (!sec) return;
+      const r = sec.getBoundingClientRect();
+      const frac = r.height ? Math.max(0, (main.getBoundingClientRect().top - r.top) / r.height) : 0;
+      UI.store.set(key, { ch, frac });
+      const pct = Math.round(main.scrollTop / Math.max(1, main.scrollHeight - main.clientHeight) * 100);
+      UI.setSub(`${pct}% · ${chapterTitle(ch)}`, showToc);
+    }, 250);
+  });
+  function chapterTitle(ch) {
+    const href = spine[ch] && spine[ch].href;
+    const t = toc.find((x) => x.href && x.href.split('#')[0] === href);
+    return t ? t.title : `rozdział ${ch + 1} z ${spine.length}`;
+  }
+  function restore() {
+    const p = UI.store.get(key, null);
+    if (!p || !root) return;
+    const sec = root.getElementById('ch-' + p.ch);
+    if (!sec) return;
+    sec.scrollIntoView({ block: 'start' });
+    requestAnimationFrame(() => { main.scrollTop += sec.getBoundingClientRect().height * p.frac; });
+  }
+
+  function goTo(href) {
+    const [file, frg] = href.split('#');
+    const idx = spine.findIndex((s) => s.href === file);
+    if (idx < 0) return;
+    const t = (frg && root.getElementById(`c${idx}-${frg}`)) || root.getElementById('ch-' + idx);
+    if (t) t.scrollIntoView({ block: 'start' });
+  }
+
+  function showToc() {
+    if (!toc.length) { UI.toast('Ta książka nie ma spisu treści'); return; }
+    const list = h('div', { class: 'list' });
+    const cur = spine[currentChapter()] && spine[currentChapter()].href;
+    let d;
+    for (const t of toc) {
+      list.append(h('button', { class: 'toc-item' + (t.href && t.href.split('#')[0] === cur ? ' cur' : ''), style: `--lvl:${t.lvl}`, text: t.title,
+        onclick: () => { d.close(); if (t.href) goTo(t.href); } }));
+    }
+    d = UI.dialog({ title: 'Spis treści', body: list, buttons: [{ label: 'Zamknij' }] });
+    const c = list.querySelector('.cur');
+    if (c) setTimeout(() => c.scrollIntoView({ block: 'center' }), 50);
+  }
+
+  UI.bar({
+    actions: [
+      { icon: 'toc', label: 'Spis treści', onClick: showToc },
+      { icon: 'search', label: 'Szukaj', onClick: () => {
+        finder = UI.find({
+          placeholder: 'Szukaj w książce',
+          onSearch: (q) => { const n = search.run(q); finder.count(n ? 1 : 0, n); },
+          onNext: () => { search.next(); finder.count(search.cur + 1, search.hits.length); },
+          onPrev: () => { search.prev(); finder.count(search.cur + 1, search.hits.length); },
+          onClose: () => { search.clear(); finder = null; },
+        });
+      } },
+    ],
+    menu: () => [
+      { icon: 'text', label: 'Tryb nocny', checked: night, onClick: () => { night = !night; UI.store.set('epubNight', night); applyNight(); } },
+      { icon: 'fit', label: 'Zwykła wielkość tekstu', onClick: () => zp.setZoom(1, 0, 0) },
+    ],
+  });
+  UI.extraInfo = () => [['Tytuł', meta.title], ['Autor', (meta.authors || []).join(', ')], ['Wydawca', meta.publisher], ['Język', meta.lang], ['Rozdziały', String(spine.length)]].filter((r) => r[1]);
+
+  (async () => {
+    UI.loading('Otwieranie książki…');
+    try {
+      await load();
+      UI.loading('Składam rozdziały…');
+      await render();
+      document.body.classList.toggle('night', night);
+      const z = UI.store.get('epubZoom', 1);
+      if (z !== 1) zp.setZoom(z, 0, 0);
+      UI.done();
+      UI.setSub([meta.authors[0], `${spine.length} ${plPlural(spine.length, 'rozdział', 'rozdziały', 'rozdziałów')}`].filter(Boolean).join(' · '), showToc);
+      setTimeout(restore, 60);
+    } catch (e) {
+      console.error(e);
+      if (String(e.message) === 'DRM') UI.fail('E-book zabezpieczony (DRM)', 'Ta książka jest zaszyfrowana przez sklep i otworzysz ją tylko w aplikacji sklepu lub czytnika, w którym ją kupiono.', { icon: 'lock' });
+      else UI.fail('Nie udało się otworzyć książki', String(e && e.message || e));
+    }
+  })();

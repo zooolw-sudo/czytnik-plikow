@@ -10,6 +10,7 @@ import android.content.Intent;
 import android.content.UriPermission;
 import android.graphics.Bitmap;
 import android.graphics.ImageDecoder;
+import android.graphics.Insets;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
@@ -20,6 +21,7 @@ import android.os.Parcelable;
 import android.provider.DocumentsContract;
 import android.provider.OpenableColumns;
 import android.util.Base64;
+import android.view.WindowInsets;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -27,7 +29,10 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
 import android.widget.Toast;
+import android.window.OnBackInvokedCallback;
+import android.window.OnBackInvokedDispatcher;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -89,6 +94,11 @@ public class MainActivity extends Activity {
     private final Deque<Opened> parents = new ArrayDeque<>();
     private boolean externalLaunch;
     private boolean inViewer;
+    /** Strona ma otwarte okno lub menu, które Wstecz powinien najpierw zamknąć. */
+    private boolean overlayOpen;
+    /** Android 13+: Wstecz trafia do aplikacji tylko gdy jest co zamknąć (predictive back). */
+    private OnBackInvokedCallback backCallback;
+    private boolean backCallbackRegistered;
     private File childDir;
     private FileOutputStream childOut;
     private File childFile;
@@ -103,7 +113,7 @@ public class MainActivity extends Activity {
 
         web = new WebView(this);
         web.setBackgroundColor(getResources().getColor(R.color.bg, getTheme()));
-        setContentView(web);
+        setContentWithInsets(web);
 
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
@@ -124,8 +134,33 @@ public class MainActivity extends Activity {
         handleIntent(getIntent());
     }
 
+    /**
+     * Od Androida 15 (targetSdk 35+) aplikacja rysuje się pod paskiem stanu i nawigacji.
+     * Odsuwamy WebView o paski systemowe, wycięcie aparatu i klawiaturę; tło kontenera ma
+     * kolor górnego paska aplikacji, więc wygląd zostaje taki jak dotąd.
+     */
+    private void setContentWithInsets(WebView view) {
+        FrameLayout root = new FrameLayout(this);
+        root.setBackgroundColor(getResources().getColor(R.color.bar, getTheme()));
+        root.addView(view, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        setContentView(root);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            root.setOnApplyWindowInsetsListener((v, insets) -> {
+                Insets i = insets.getInsets(WindowInsets.Type.systemBars()
+                        | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
+                v.setPadding(i.left, i.top, i.right, i.bottom);
+                return WindowInsets.CONSUMED;
+            });
+        }
+    }
+
     @Override
     protected void onDestroy() {
+        if (backCallbackRegistered && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(backCallback);
+            backCallbackRegistered = false;
+        }
         io.shutdownNow();
         Recents.deleteTree(childDir);
         if (web != null) {
@@ -161,15 +196,22 @@ public class MainActivity extends Activity {
     }
 
     private void showOpening() {
-        inViewer = false;
+        setInViewer(false);
         web.loadUrl(BASE + "web/index.html?opening=");
     }
 
     private void loadHome() {
-        inViewer = false;
+        setInViewer(false);
         current = null;
         parents.clear();
         web.loadUrl(BASE + "web/index.html");
+    }
+
+    /** Każde przejście do innej strony zeruje też nakładki – nowa strona zaczyna bez okien. */
+    private void setInViewer(boolean viewer) {
+        inViewer = viewer;
+        overlayOpen = false;
+        updateBackInterception();
     }
 
     private void pickFile() {
@@ -451,7 +493,7 @@ public class MainActivity extends Activity {
                 + "&type=" + enc(t)
                 + "&size=" + Math.max(0, o.size)
                 + extra;
-        inViewer = true;
+        setInViewer(true);
         web.loadUrl(url);
     }
 
@@ -463,12 +505,39 @@ public class MainActivity extends Activity {
     /* Wstecz, udostępnianie, otwieranie w innej aplikacji                 */
     /* ------------------------------------------------------------------ */
 
-    @Override
-    public void onBackPressed() {
+    /**
+     * Android 13+ (android:enableOnBackInvokedCallback="true", a od targetSdk 36 zawsze):
+     * onBackPressed() nie jest wywoływane. Wstecz przejmujemy tylko wtedy, gdy jest co
+     * zamknąć – podgląd pliku albo okno/menu na stronie. Na ekranie startowym Wstecz
+     * obsługuje system (z animacją powrotu do ekranu głównego).
+     */
+    private void updateBackInterception() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return; // starsze: onBackPressed()
+        boolean intercept = inViewer || overlayOpen;
+        OnBackInvokedDispatcher dispatcher = getOnBackInvokedDispatcher();
+        if (intercept && !backCallbackRegistered) {
+            if (backCallback == null) backCallback = this::dispatchBack;
+            dispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, backCallback);
+            backCallbackRegistered = true;
+        } else if (!intercept && backCallbackRegistered) {
+            dispatcher.unregisterOnBackInvokedCallback(backCallback);
+            backCallbackRegistered = false;
+        }
+    }
+
+    /** Najpierw strona (zamyka okno, menu, wyszukiwanie), potem nawigacja między plikami. */
+    private void dispatchBack() {
         web.evaluateJavascript("window.handleBack ? String(window.handleBack()) : 'false'", v -> {
             if (v != null && v.contains("true")) return;
             navigateBack();
         });
+    }
+
+    /** Android 8–12 (i 13+, gdyby callback nie był włączony). */
+    @SuppressWarnings("deprecation")
+    @Override
+    public void onBackPressed() {
+        dispatchBack();
     }
 
     private void navigateBack() {
@@ -722,6 +791,15 @@ public class MainActivity extends Activity {
             main.post(MainActivity.this::navigateBack);
         }
 
+        /** Strona zgłasza, czy ma otwarte okno lub menu (wtedy Wstecz je zamyka). */
+        @JavascriptInterface
+        public void setOverlayOpen(boolean open) {
+            main.post(() -> {
+                overlayOpen = open;
+                updateBackInterception();
+            });
+        }
+
         @JavascriptInterface
         public void share() {
             main.post(MainActivity.this::share);
@@ -879,7 +957,7 @@ public class MainActivity extends Activity {
                     : getContentResolver().openInputStream(o.uri);
             if (in == null) return error(404, "Not Found");
             String mime = o.display != null ? "image/jpeg" : "image".equals(o.type) && o.mime.contains("*") ? "image/png" : o.mime;
-            return new WebResourceResponse(mime, null, 200, "OK", headers(), in);
+            return new WebResourceResponse(mime, null, 200, "OK", fileHeaders(), in);
         } catch (Exception e) {
             return error(404, "Not Found");
         }
@@ -889,6 +967,17 @@ public class MainActivity extends Activity {
         Map<String, String> h = new HashMap<>();
         h.put("Cache-Control", "no-store");
         h.put("Access-Control-Allow-Origin", "*");
+        return h;
+    }
+
+    /**
+     * Otwierany plik jest tylko danymi dla przeglądarki formatu. Gdyby jakimś sposobem został
+     * wczytany jako strona (np. plik HTML), nie może uruchomić skryptów ani sięgnąć do mostu App.
+     */
+    private static Map<String, String> fileHeaders() {
+        Map<String, String> h = headers();
+        h.put("X-Content-Type-Options", "nosniff");
+        h.put("Content-Security-Policy", "sandbox; default-src 'none'; img-src 'self' blob: data:; style-src 'unsafe-inline'");
         return h;
     }
 

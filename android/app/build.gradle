@@ -7,13 +7,14 @@ def runNumber = (System.getenv('GITHUB_RUN_NUMBER') ?: '1') as Integer
 
 android {
     namespace 'pl.zooolw.czytnik'
-    compileSdk 35
+    compileSdk 36
 
     defaultConfig {
         applicationId 'pl.zooolw.czytnik'
         // Android 8.0+ (m.in. tablet Huawei MediaPad T5)
         minSdk 26
-        targetSdk 34
+        // Google Play: od 31.08.2026 nowe aplikacje i aktualizacje muszą celować w API 36
+        targetSdk 36
         versionCode runNumber
         versionName "1.0.${runNumber}"
     }
