@@ -1,0 +1,51 @@
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Zbuduj APK
+        working-directory: android
+        run: gradle assembleRelease --no-daemon --stacktrace
+
+      - name: Nazwij plik
+        run: cp android/app/build/outputs/apk/release/app-release.apk czytnik-plikow.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: czytnik-plikow-apk
+          path: czytnik-plikow.apk
+
+      - name: Wystaw do pobrania (Releases)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete apk --yes --cleanup-tag || true
+          gh release create apk czytnik-plikow.apk \
+            --target "${{ github.sha }}" \
+            --title "Czytnik plików na Androida (wersja 1.0.${{ github.run_number }})" \
+            --notes "Plik APK do zainstalowania w telefonie lub tablecie z Androidem 8.0 lub nowszym. Bezpośredni link: https://github.com/${{ github.repository }}/releases/latest/download/czytnik-plikow.apk" \
+            --latest

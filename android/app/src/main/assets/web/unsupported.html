@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Nieobsługiwany plik</title>
+<link rel="stylesheet" href="common.css">
+</head>
+<body>
+<script src="common.js"></script>
+<script>
+  'use strict';
+  const MSG = {
+    doc: ['Stary format Word (.doc)', 'Ten czytnik pokazuje dokumenty Word w nowym formacie DOCX. Stary format .doc otwórz w innej aplikacji albo zapisz go w Wordzie jako DOCX.'],
+    ppt: ['Prezentacja', 'Prezentacje (PPT, PPTX, ODP) nie są jeszcze obsługiwane.'],
+    encrypted: ['Plik chroniony hasłem', 'Ten dokument Office jest zaszyfrowany hasłem. Czytnik nie otwiera zaszyfrowanych plików Word/Excel.'],
+    zip: ['Archiwum ZIP', 'To jest archiwum, a nie dokument. Rozpakuj je w menedżerze plików.'],
+    rtf: ['Dokument RTF', 'Format RTF nie jest obsługiwany. Otwórz go w innej aplikacji.'],
+    odf: ['Plik OpenDocument', 'Ten rodzaj pliku OpenDocument (np. prezentacja lub rysunek) nie jest obsługiwany. Czytnik otwiera dokumenty ODT i arkusze ODS.'],
+    unknown: ['Nieznany typ pliku', 'Czytnik nie rozpoznał tego pliku. Obsługiwane są: PDF, DOCX, ODT, XLSX, XLS, ODS, CSV, pliki tekstowe i obrazy.'],
+  };
+  const [title, msg] = MSG[Q.get('reason')] || MSG.unknown;
+  UI.bar({});
+  UI.fail(title, msg, { icon: Q.get('reason') === 'encrypted' ? 'lock' : 'file' });
+</script>
+</body>
+</html>

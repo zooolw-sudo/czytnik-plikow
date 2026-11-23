@@ -1,0 +1,43 @@
+/* Dokumenty tekstowe (DOCX, ODT): widok strony i widok do czytania */
+#doc { min-height: 100%; }
+
+/* ----- widok strony: kartki jak w edytorze, dopasowane do szerokości ekranu ----- */
+#doc.paged .docx-wrapper,
+#doc.paged .odt-wrapper {
+  background: transparent;
+  padding: 10px;
+  display: block;
+  width: max-content;
+  min-width: 100%;
+}
+#doc.paged .docx-wrapper > section.docx,
+#doc.paged .odt-page {
+  margin: 0 auto 10px;
+  background: #fff;
+  color: #000;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .28);
+}
+
+/* ----- widok do czytania: tekst zawija się do szerokości telefonu ----- */
+body.reading .main { background: #fff; }
+#doc.reading .docx-wrapper,
+#doc.reading .odt-wrapper { background: #fff; padding: 0; display: block; }
+#doc.reading .docx-wrapper > section.docx,
+#doc.reading .odt-page {
+  padding: 18px 16px !important;
+  margin: 0;
+  width: auto !important;
+  min-height: 0 !important;
+  box-shadow: none;
+  background: #fff;
+  color: #000;
+  overflow-x: auto;
+}
+#doc.reading section.docx + section.docx,
+#doc.reading .odt-page + .odt-page { border-top: 1px dashed #c9ced8; }
+#doc.reading img { max-width: 100% !important; height: auto !important; }
+#doc.reading .odt-frame { max-width: 100%; }
+
+@media (prefers-color-scheme: dark) {
+  body.reading .main { background: #fff; }
+}

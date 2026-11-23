@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>PDF</title>
+<link rel="stylesheet" href="lib/pdfjs/pdf_viewer.css">
+<link rel="stylesheet" href="common.css">
+<style>
+  #viewerContainer {
+    position: absolute; top: var(--bar-h); left: 0; right: 0; bottom: 0;
+    overflow: auto; background: var(--bg);
+    touch-action: pan-x pan-y;
+  }
+  #viewer {
+    --page-margin: 8px auto 0;
+    --page-border: 0px solid transparent;
+    padding-bottom: 12px;
+  }
+  .pdfViewer .page { box-shadow: 0 1px 4px rgba(0, 0, 0, .28); background: #fff; }
+  .pdfViewer .page .loadingIcon::after { display: none; }
+  /* pływający numer strony przy przewijaniu */
+  #pageBadge {
+    position: fixed; right: 12px; bottom: 16px; z-index: 40;
+    background: rgba(21, 35, 59, .86); color: #fff;
+    font-size: 13.5px; padding: 6px 12px; border-radius: 16px;
+    opacity: 0; transition: opacity .25s; pointer-events: none;
+  }
+  #pageBadge.show { opacity: 1; }
+  .toc-item { padding-left: calc(var(--lvl) * 16px + 4px) !important; }
+</style>
+</head>
+<body>
+<div id="viewerContainer"><div id="viewer" class="pdfViewer"></div></div>
+<div id="pageBadge"></div>
+<script src="common.js"></script>
+<script type="module" src="pdfview.js"></script>
+</body>
+</html>

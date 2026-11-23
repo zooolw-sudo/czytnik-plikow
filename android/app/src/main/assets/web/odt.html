@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Dokument</title>
+<link rel="stylesheet" href="common.css">
+<link rel="stylesheet" href="doc.css">
+</head>
+<body>
+<div class="main" id="main"><div id="doc"></div></div>
+<script src="common.js"></script>
+<script src="lib/jszip.min.js"></script>
+<script src="odt.js"></script>
+<script src="docview.js"></script>
+<script>
+  DocView.start({ label: 'Dokument ODT', render: (data, el, mode) => OdtView.render(data, el, mode) });
+</script>
+</body>
+</html>

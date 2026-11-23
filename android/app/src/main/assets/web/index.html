@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Czytnik plików</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  #main { padding: 16px 14px 30px; }
+  .hero {
+    background: var(--card); border-radius: 18px; padding: 22px 18px 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .08); text-align: center;
+  }
+  .hero .btn { width: 100%; justify-content: center; padding: 15px 20px; font-size: 16.5px; border-radius: 14px; }
+  .hero .btn svg { width: 24px; height: 24px; }
+  .formats { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 14px; }
+  .formats span { font-size: 11.5px; font-weight: 700; letter-spacing: .3px; padding: 4px 8px; border-radius: 6px; color: #fff; }
+  h2.sec { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; margin: 24px 4px 8px; display: flex; align-items: center; }
+  h2.sec .n { margin-left: 6px; font-weight: 500; }
+  .recent { background: var(--card); border-radius: 16px; overflow: hidden; box-shadow: 0 1px 3px rgba(0, 0, 0, .08); }
+  .row { display: flex; align-items: center; gap: 12px; padding: 10px 4px 10px 12px; border-bottom: 1px solid var(--border); }
+  .row:last-child { border-bottom: 0; }
+  .row:active { background: var(--accent-soft); }
+  .badge {
+    flex: none; width: 42px; height: 50px; border-radius: 6px 12px 6px 6px; color: #fff;
+    display: grid; place-items: end center; padding-bottom: 7px;
+    font-size: 10.5px; font-weight: 800; letter-spacing: .2px; position: relative;
+  }
+  .badge::before { content: ""; position: absolute; top: 0; right: 0; width: 12px; height: 12px; background: rgba(255, 255, 255, .35); border-radius: 0 12px 0 6px; }
+  .row .t { flex: 1; min-width: 0; }
+  .row .nm { font-size: 15.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .meta { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .row .ibtn { color: var(--muted); }
+  .row .ibtn svg { width: 20px; height: 20px; }
+  .empty { color: var(--muted); font-size: 14.5px; line-height: 1.5; padding: 18px 16px; background: var(--card); border-radius: 16px; }
+  .ver { text-align: center; color: var(--muted); font-size: 12px; margin-top: 26px; opacity: .7; }
+</style>
+</head>
+<body>
+<div class="main" id="main">
+  <div class="hero">
+    <button class="btn" id="openBtn"></button>
+    <div class="formats" id="formats"></div>
+  </div>
+  <h2 class="sec">Ostatnio otwierane <span class="n" id="cnt"></span></h2>
+  <div id="list"></div>
+  <div class="ver" id="ver"></div>
+</div>
+<script src="common.js"></script>
+<script>
+  'use strict';
+  const COLORS = { pdf: '#e0483b', docx: '#2b67d1', odt: '#1d8bd0', sheet: '#1e9a57', csv: '#139a8f', text: '#6b7486', image: '#8b5cf6', unsupported: '#8a93a3' };
+  const FORMATS = [['PDF', 'pdf'], ['DOCX', 'docx'], ['ODT', 'odt'], ['XLSX', 'sheet'], ['XLS', 'sheet'], ['ODS', 'sheet'], ['CSV', 'csv'], ['TXT', 'text'], ['JPG/PNG', 'image']];
+
+  UI.bar({
+    home: true,
+    menu: () => [
+      { icon: 'trash', label: 'Wyczyść listę ostatnich', onClick: clearAll },
+      { icon: 'info', label: 'O aplikacji', onClick: about },
+    ],
+  });
+
+  const openBtn = document.getElementById('openBtn');
+  openBtn.innerHTML = icon('folder') + 'Otwórz plik';
+  openBtn.onclick = () => (Bridge ? Bridge.pickFile() : UI.toast('Wybór pliku działa w aplikacji'));
+  document.getElementById('formats').append(...FORMATS.map(([t, k]) => h('span', { text: t, style: `background:${COLORS[k]}` })));
+  if (Bridge && Bridge.version) document.getElementById('ver').textContent = 'Czytnik plików ' + Bridge.version();
+
+  function when(ts) {
+    const d = new Date(ts), now = new Date();
+    const hm = d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+    const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const diff = Math.round((day(now) - day(d)) / 86400000);
+    if (diff === 0) return 'dziś, ' + hm;
+    if (diff === 1) return 'wczoraj, ' + hm;
+    const opt = { day: 'numeric', month: 'short' };
+    if (d.getFullYear() !== now.getFullYear()) opt.year = 'numeric';
+    return d.toLocaleDateString('pl-PL', opt) + ', ' + hm;
+  }
+
+  function badgeText(item) {
+    const ext = (item.name.includes('.') ? item.name.split('.').pop() : item.type).toUpperCase();
+    return ext.length > 4 ? ext.slice(0, 4) : ext;
+  }
+
+  function render() {
+    let items = [];
+    try { items = Bridge ? JSON.parse(Bridge.recents()) : UI.store.get('demoRecents', []); } catch (e) { items = []; }
+    const list = document.getElementById('list');
+    list.innerHTML = '';
+    document.getElementById('cnt').textContent = items.length ? `(${items.length})` : '';
+    if (!items.length) {
+      list.append(h('div', { class: 'empty', html:
+        'Tu pojawią się otwierane pliki.<br><br>Załączniki z Gmaila, pliki z Dysku Google czy z menedżera plików ' +
+        'możesz też otwierać bezpośrednio: <b>Otwórz za pomocą → Czytnik plików</b>.' }));
+      return;
+    }
+    const box = h('div', { class: 'recent' });
+    for (const it of items) {
+      const meta = [it.size ? UI.formatSize(it.size) : null, it.time ? when(it.time) : null].filter(Boolean).join(' · ');
+      box.append(h('div', { class: 'row', onclick: (e) => { if (!e.target.closest('.ibtn')) Bridge && Bridge.openRecent(it.id); } },
+        h('div', { class: 'badge', style: `background:${COLORS[it.type] || COLORS.unsupported}`, text: badgeText(it) }),
+        h('div', { class: 't' }, h('div', { class: 'nm', text: it.name }), h('div', { class: 'meta', text: meta })),
+        h('button', { class: 'ibtn', 'aria-label': 'Usuń z listy', html: icon('close'), onclick: () => { Bridge && Bridge.removeRecent(it.id); render(); } })));
+    }
+    list.append(box);
+  }
+
+  function clearAll() {
+    UI.dialog({
+      title: 'Wyczyścić listę?',
+      body: 'Lista ostatnio otwieranych plików zostanie wyczyszczona. Same pliki nie zostaną usunięte.',
+      buttons: [{ label: 'Anuluj' }, { label: 'Wyczyść', primary: true, action: () => { Bridge && Bridge.clearRecents(); render(); } }],
+    });
+  }
+
+  function about() {
+    UI.dialog({
+      title: 'Czytnik plików',
+      body: h('div', { html:
+        'Przeglądarka dokumentów działająca bez internetu – pliki nie są nigdzie wysyłane.<br><br>' +
+        '<b>Obsługiwane:</b> PDF, Word (DOCX), OpenDocument (ODT, ODS), Excel (XLSX, XLSM, XLSB, XLS), CSV, pliki tekstowe, obrazy.<br><br>' +
+        '<span style="color:var(--muted);font-size:13px">Wykorzystuje biblioteki open source: pdf.js (Mozilla), docx-preview, SheetJS, JSZip.</span>' }),
+      buttons: [{ label: 'OK', primary: true }],
+    });
+  }
+
+  window.onRecentsChanged = render;
+  window.showOpening = (name) => UI.loading(name ? `Otwieranie „${name}”…` : 'Otwieranie…');
+  render();
+  if (Q.get('opening') != null) window.showOpening(Q.get('opening'));
+</script>
+</body>
+</html>

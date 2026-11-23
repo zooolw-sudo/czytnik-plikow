@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Jasny motyw; w trybie ciemnym zastępuje go values-night (WebView dostosowuje wtedy kolory stron) -->
+    <style name="AppTheme" parent="android:Theme.DeviceDefault.Light.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:statusBarColor">@color/bar</item>
+        <item name="android:navigationBarColor">@color/bar</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
