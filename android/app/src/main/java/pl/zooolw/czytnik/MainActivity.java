@@ -396,6 +396,8 @@ public class MainActivity extends Activity {
             case "text": page = "text.html"; break;
             case "xml": page = "xml.html"; break;
             case "zip": page = "zip.html"; break;
+            case "eml": page = "eml.html"; break;
+            case "md": case "html": page = "md.html"; break;
             case "image": page = "image.html"; break;
             default:
                 page = "unsupported.html";

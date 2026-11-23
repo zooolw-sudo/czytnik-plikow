@@ -26,9 +26,9 @@ final class FileTypes {
     private FileTypes() {}
 
     private static final Set<String> TEXT_EXT = new HashSet<>(Arrays.asList(
-            "txt", "log", "md", "json", "ini", "cfg", "conf", "yaml", "yml", "properties",
+            "txt", "log", "json", "ini", "cfg", "conf", "yaml", "yml", "properties",
             "js", "py", "java", "kt", "c", "h", "cpp", "ino", "sql", "sh", "bat", "srt", "nfo",
-            "gcode", "nc", "html", "htm", "css", "tex"));
+            "gcode", "nc", "css", "tex"));
     private static final Set<String> XML_EXT = new HashSet<>(Arrays.asList(
             "xml", "xsd", "xsl", "xslt", "rss", "atom", "gpx", "kml", "xades", "xaml", "wsdl", "plist", "jpk", "upo"));
     private static final Set<String> IMAGE_EXT = new HashSet<>(Arrays.asList(
@@ -55,6 +55,12 @@ final class FileTypes {
         MIME.put("json", "application/json");
         MIME.put("xml", "text/xml");
         MIME.put("xades", "application/xml");
+        MIME.put("eml", "message/rfc822");
+        MIME.put("mht", "multipart/related");
+        MIME.put("mhtml", "multipart/related");
+        MIME.put("md", "text/markdown");
+        MIME.put("html", "text/html");
+        MIME.put("htm", "text/html");
         MIME.put("jpg", "image/jpeg");
         MIME.put("jpeg", "image/jpeg");
         MIME.put("png", "image/png");
@@ -88,6 +94,9 @@ final class FileTypes {
             case "csv": return "text/csv";
             case "text": return "text/plain";
             case "xml": return "text/xml";
+            case "eml": return "message/rfc822";
+            case "md": return "text/markdown";
+            case "html": return "text/html";
             case "image": return "image/*";
             default: return "application/octet-stream";
         }
@@ -123,13 +132,20 @@ final class FileTypes {
                 || m.equals("application/csv") || m.contains("tab-separated")) return "csv";
         if (ext.equals("svg") || (IMAGE_EXT.contains(ext) && m.startsWith("image/"))) return "image";
         if (XML_EXT.contains(ext)) return "xml";
+        if (ext.equals("eml") || ext.equals("mht") || ext.equals("mhtml") || m.equals("message/rfc822") || m.equals("multipart/related")) return "eml";
+        if (ext.equals("md") || ext.equals("markdown") || ext.equals("mkd") || m.equals("text/markdown") || m.equals("text/x-markdown")) return "md";
+        if (ext.equals("html") || ext.equals("htm") || ext.equals("xhtml")) return "html";
         String start = textStart(head, n);
+        String low = start.toLowerCase(Locale.ROOT);
+        if (low.startsWith("<!doctype html") || low.startsWith("<html")) return "html";
+        if (ext.isEmpty() && looksLikeMail(start)) return "eml";
         if (start.startsWith("<?xml")) {
             String lower = start.toLowerCase(Locale.ROOT);
             if (lower.contains("<svg")) return "image";
             if (!lower.contains("<html")) return "xml";
         }
         if (m.equals("text/xml") || m.equals("application/xml")) return "xml";
+        if (m.equals("text/html")) return "html";
         if (TEXT_EXT.contains(ext) || m.startsWith("text/") || m.equals("application/json")) return "text";
         if (n == 0) return "text";
         if (looksLikeText(head, n)) return "text";
@@ -141,6 +157,7 @@ final class FileTypes {
         switch (ext) {
             case "xls": case "xlt": case "xla": return "sheet";
             case "doc": case "dot": return "doc";
+            case "msg": return "msg";
             case "ppt": case "pps": case "pot": return "ppt";
             case "docx": case "docm": case "dotx": case "xlsx": case "xlsm": case "xlsb": case "pptx":
                 return "encrypted";   // zaszyfrowane pliki Office są zapisane w kontenerze OLE
@@ -180,6 +197,15 @@ final class FileTypes {
             case "pptx": case "odp": return "ppt";
             default: return "zip";
         }
+    }
+
+    /** Plik bez rozszerzenia zaczynający się nagłówkami poczty. */
+    private static boolean looksLikeMail(String s) {
+        int hits = 0;
+        for (String h : new String[]{"received:", "from:", "to:", "subject:", "date:", "mime-version:", "message-id:", "return-path:", "delivered-to:"}) {
+            if (s.regionMatches(true, 0, h, 0, h.length()) || s.toLowerCase(Locale.ROOT).contains("\n" + h)) hits++;
+        }
+        return hits >= 3;
     }
 
     private static boolean looksLikeText(byte[] b, int n) {
