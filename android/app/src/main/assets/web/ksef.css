@@ -1,0 +1,47 @@
+/* Widok e-faktury KSeF */
+.inv { padding: 12px 12px 36px; max-width: 760px; margin: 0 auto; color: var(--text); font-size: 14.5px; line-height: 1.4; }
+.inv .inv-head {
+  background: var(--bar-bg); color: #fff; border-radius: 16px; padding: 14px 16px 12px;
+}
+.inv .inv-head .kind { font-size: 12.5px; text-transform: uppercase; letter-spacing: .6px; color: #a9bad6; font-weight: 700; }
+.inv .inv-head h1 { margin: 2px 0 8px; font-size: 21px; word-break: break-word; }
+.inv .inv-head .kv dt { color: #a9bad6; }
+.inv .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; margin-top: 10px; }
+.inv .card h3 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+.inv .card h4 { margin: 10px 0 4px; font-size: 15px; }
+.inv .parties { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0 10px; }
+.inv .nm { font-weight: 700; font-size: 15.5px; }
+.inv .ids { color: var(--accent); font-weight: 600; font-size: 13.5px; margin-top: 2px; }
+.inv .adr { white-space: pre-line; margin-top: 4px; }
+.inv .small { color: var(--muted); font-size: 13px; margin-top: 4px; white-space: pre-line; }
+.inv .kv { grid-template-columns: minmax(90px, auto) 1fr; font-size: 14px; }
+.inv .kv dd { white-space: pre-line; }
+.inv .pos { border-top: 1px solid var(--border); padding: 9px 0; }
+.inv .pos:first-of-type { border-top: 0; padding-top: 2px; }
+.inv .pos.before { opacity: .65; }
+.inv .pos .t { font-weight: 600; }
+.inv .pos .nr { color: var(--muted); font-weight: 500; margin-right: 6px; }
+.inv .pos .calc { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 13.5px; margin-top: 3px; }
+.inv .pos .calc b { color: var(--text); white-space: nowrap; }
+.inv .pos .meta { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.inv .tblwrap { overflow-x: auto; }
+.inv table.vat { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.inv table.vat th { text-align: right; color: var(--muted); font-weight: 600; font-size: 12px; padding: 4px 6px; border-bottom: 1px solid var(--border); }
+.inv table.vat td { text-align: right; padding: 5px 6px; white-space: pre-line; border-bottom: 1px solid var(--border); }
+.inv table.vat th:first-child, .inv table.vat td:first-child { text-align: left; }
+.inv table.vat tr.sum td { font-weight: 700; border-bottom: 0; }
+.inv .total {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  background: var(--accent); color: #fff; border-radius: 14px; padding: 14px 16px; margin-top: 10px; font-weight: 600;
+}
+.inv .total .amt { font-size: 24px; font-weight: 800; white-space: nowrap; }
+.inv .paid { display: inline-block; background: #1e9a57; color: #fff; font-weight: 700; padding: 4px 10px; border-radius: 8px; margin-bottom: 8px; }
+.inv .acct { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft); }
+.inv .acct .lbl { font-size: 12.5px; color: var(--muted); }
+.inv .acct .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 3px 0; }
+.inv .acct .no { font-family: "Roboto Mono", monospace; font-size: 15px; font-weight: 600; letter-spacing: .2px; word-break: break-all; }
+.inv .acct .copy { border: 0; border-radius: 8px; background: var(--accent); color: #fff; font-size: 13px; font-weight: 600; padding: 7px 11px; flex: none; }
+.inv .paylink { display: inline-block; margin-top: 10px; color: var(--accent); font-weight: 600; }
+.inv .flag { display: inline-block; padding: 4px 9px; border-radius: 8px; background: rgba(214, 69, 69, .12); color: #c0392b; font-weight: 600; font-size: 13px; margin: 2px 6px 2px 0; }
+.inv .foot { margin: 0 0 6px; }
+.inv .gen { text-align: center; color: var(--muted); font-size: 12px; margin-top: 14px; }

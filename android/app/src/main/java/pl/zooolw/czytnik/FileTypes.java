@@ -18,7 +18,7 @@ import java.util.zip.ZipInputStream;
  * Rozpoznawanie rodzaju pliku po zawartości (nagłówek, wnętrze archiwum ZIP),
  * a dopiero w drugiej kolejności po rozszerzeniu i typie MIME.
  *
- * Wynik: pdf, docx, odt, sheet, csv, text, image
+ * Wynik: pdf, docx, odt, sheet, csv, xml, text, image
  * albo nieobsługiwane: doc, ppt, encrypted, zip, rtf, odf, unknown.
  */
 final class FileTypes {
@@ -26,9 +26,11 @@ final class FileTypes {
     private FileTypes() {}
 
     private static final Set<String> TEXT_EXT = new HashSet<>(Arrays.asList(
-            "txt", "log", "md", "json", "xml", "ini", "cfg", "conf", "yaml", "yml", "properties",
+            "txt", "log", "md", "json", "ini", "cfg", "conf", "yaml", "yml", "properties",
             "js", "py", "java", "kt", "c", "h", "cpp", "ino", "sql", "sh", "bat", "srt", "nfo",
             "gcode", "nc", "html", "htm", "css", "tex"));
+    private static final Set<String> XML_EXT = new HashSet<>(Arrays.asList(
+            "xml", "xsd", "xsl", "xslt", "rss", "atom", "gpx", "kml", "xades", "xaml", "wsdl", "plist", "jpk", "upo"));
     private static final Set<String> IMAGE_EXT = new HashSet<>(Arrays.asList(
             "jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "heic", "heif", "avif"));
 
@@ -52,6 +54,7 @@ final class FileTypes {
         MIME.put("txt", "text/plain");
         MIME.put("json", "application/json");
         MIME.put("xml", "text/xml");
+        MIME.put("xades", "application/xml");
         MIME.put("jpg", "image/jpeg");
         MIME.put("jpeg", "image/jpeg");
         MIME.put("png", "image/png");
@@ -84,6 +87,7 @@ final class FileTypes {
             case "sheet": return MIME.get("xlsx");
             case "csv": return "text/csv";
             case "text": return "text/plain";
+            case "xml": return "text/xml";
             case "image": return "image/*";
             default: return "application/octet-stream";
         }
@@ -116,6 +120,14 @@ final class FileTypes {
         if (ext.equals("csv") || ext.equals("tsv") || m.equals("text/csv") || m.equals("text/comma-separated-values")
                 || m.equals("application/csv") || m.contains("tab-separated")) return "csv";
         if (ext.equals("svg") || (IMAGE_EXT.contains(ext) && m.startsWith("image/"))) return "image";
+        if (XML_EXT.contains(ext)) return "xml";
+        String start = textStart(head, n);
+        if (start.startsWith("<?xml")) {
+            String lower = start.toLowerCase(Locale.ROOT);
+            if (lower.contains("<svg")) return "image";
+            if (!lower.contains("<html")) return "xml";
+        }
+        if (m.equals("text/xml") || m.equals("application/xml")) return "xml";
         if (TEXT_EXT.contains(ext) || m.startsWith("text/") || m.equals("application/json")) return "text";
         if (n == 0) return "text";
         if (looksLikeText(head, n)) return "text";
@@ -177,6 +189,17 @@ final class FileTypes {
             if (c < 9 || (c > 13 && c < 32 && c != 27)) bad++;
         }
         return bad * 50 < n;
+    }
+
+    /** Początek pliku tekstowego jako napis (UTF-8 albo UTF-16 z BOM), bez BOM i początkowych spacji. */
+    private static String textStart(byte[] b, int n) {
+        String s;
+        if (n >= 2 && (b[0] & 0xff) == 0xFF && (b[1] & 0xff) == 0xFE) s = new String(b, 2, n - 2, StandardCharsets.UTF_16LE);
+        else if (n >= 2 && (b[0] & 0xff) == 0xFE && (b[1] & 0xff) == 0xFF) s = new String(b, 2, n - 2, StandardCharsets.UTF_16BE);
+        else s = new String(b, 0, n, StandardCharsets.UTF_8);
+        int i = 0;
+        while (i < s.length() && (Character.isWhitespace(s.charAt(i)) || s.charAt(i) == '\uFEFF')) i++;
+        return s.substring(i, Math.min(s.length(), i + 1024));
     }
 
     private static int readFully(InputStream in, byte[] buf) throws IOException {

@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.content.UriPermission;
@@ -375,6 +376,7 @@ public class MainActivity extends Activity {
             case "odt": page = "odt.html"; break;
             case "sheet": case "csv": page = "sheet.html"; break;
             case "text": page = "text.html"; break;
+            case "xml": page = "xml.html"; break;
             case "image": page = "image.html"; break;
             default:
                 page = "unsupported.html";
@@ -541,6 +543,14 @@ public class MainActivity extends Activity {
             } catch (JSONException ignored) {
             }
             return j.toString();
+        }
+
+        @JavascriptInterface
+        public void copy(String text) {
+            main.post(() -> {
+                ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("Czytnik plików", text));
+            });
         }
 
         @JavascriptInterface

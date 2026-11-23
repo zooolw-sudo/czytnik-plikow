@@ -47,6 +47,8 @@
                 <data android:mimeType="application/csv" />
                 <data android:mimeType="text/plain" />
                 <data android:mimeType="application/json" />
+                <data android:mimeType="text/xml" />
+                <data android:mimeType="application/xml" />
                 <data android:mimeType="application/octet-stream" />
             </intent-filter>
 
@@ -63,6 +65,8 @@
                 <data android:mimeType="application/vnd.oasis.opendocument.spreadsheet" />
                 <data android:mimeType="text/csv" />
                 <data android:mimeType="text/comma-separated-values" />
+                <data android:mimeType="text/xml" />
+                <data android:mimeType="application/xml" />
             </intent-filter>
         </activity>
 

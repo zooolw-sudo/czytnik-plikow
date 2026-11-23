@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>XML</title>
+<link rel="stylesheet" href="common.css">
+<link rel="stylesheet" href="ksef.css">
+<style>
+  #main { background: var(--card); }
+  .tabs2 {
+    position: fixed; top: var(--bar-h); left: 0; right: 0; height: 44px; z-index: 20;
+    display: flex; background: var(--card); border-bottom: 1px solid var(--border);
+  }
+  .tabs2[hidden] { display: none; }
+  .tabs2 button { flex: 1; border: 0; background: none; font-size: 14.5px; font-weight: 600; color: var(--muted); border-bottom: 3px solid transparent; }
+  .tabs2 button.on { color: var(--accent); border-bottom-color: var(--accent); }
+  body.has-tabs #main { top: calc(var(--bar-h) + 44px); }
+
+  /* drzewo i tekst XML */
+  .xml { font: 13px/1.55 "Roboto Mono", "Droid Sans Mono", monospace; padding: 10px 10px 40px 4px; color: var(--text); }
+  .xml .n { padding-left: 14px; position: relative; }
+  .xml .row { white-space: pre-wrap; overflow-wrap: anywhere; padding-left: 2px; }
+  .xml .tg {
+    position: absolute; left: -2px; width: 16px; text-align: center; color: var(--muted);
+    cursor: pointer; user-select: none; font-size: 11px; line-height: 20px;
+  }
+  .xml .kids { border-left: 1px dotted var(--border); margin-left: 3px; }
+  .xml .t { color: #1d5fc2; }
+  .xml .a { color: #8e44ad; }
+  .xml .v { color: #b4530f; }
+  .xml .p { color: #8b94a5; }
+  .xml .c { color: #5d8a3a; font-style: italic; }
+  .xml .tx { color: var(--text); font-weight: 500; }
+  .xml .more { color: var(--accent); cursor: pointer; padding-left: 16px; }
+  @media (prefers-color-scheme: dark) {
+    .xml .t { color: #79a8ff; }
+    .xml .a { color: #d09cf0; }
+    .xml .v { color: #f0a46b; }
+    .xml .c { color: #8fbf6a; }
+  }
+  .xml-text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+  .note { margin: 10px; padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); font-size: 14px; }
+  .note.err { background: rgba(214, 69, 69, .12); color: var(--danger); }
+</style>
+</head>
+<body>
+<div class="tabs2" id="tabs2" hidden>
+  <button data-v="invoice" class="on">Faktura</button>
+  <button data-v="tree">XML</button>
+</div>
+<div class="main" id="main"><div id="box"></div></div>
+<script src="common.js"></script>
+<script src="ksef.js"></script>
+<script src="xmlview.js"></script>
+</body>
+</html>
