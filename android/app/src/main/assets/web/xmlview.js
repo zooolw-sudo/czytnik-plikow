@@ -1,6 +1,7 @@
 /*
- * Przeglądarka XML: drzewo ze zwijaniem gałęzi, sformatowany tekst z kolorami,
- * a dla e-faktur z KSeF (FA(2), FA(3)) – czytelny widok faktury.
+ * Przeglądarka XML: widok dokumentu (pola, tabele, sekcje), drzewo ze zwijaniem gałęzi
+ * i sformatowany tekst z kolorami. Dla e-faktur z KSeF (FA(2), FA(3)) i e-sprawozdań
+ * finansowych – osobne, czytelne widoki.
  */
 'use strict';
 
@@ -10,7 +11,8 @@ const tabs = document.getElementById('tabs2');
 const zp = new ZoomPane(main, box, { min: 0.5, max: 4, fit: () => 1 });
 const search = new DomSearch(box, main);
 
-let raw = null, xmlDoc = null, enc = null, view = 'tree', invoice = null, finder = null;
+let raw = null, xmlDoc = null, enc = null, view = 'tree', special = null, finder = null;
+let docAll = false;
 let treeAll = false;
 
 const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -140,17 +142,21 @@ function setView(v) {
   zp.setZoom(1, 0, 0);
   main.scrollTop = 0;
   main.style.background = '';
-  if (v === 'invoice') Ksef.render(invoice, box);
+  if (v === 'special') special.render(xmlDoc, box);
+  else if (v === 'doc') XmlDoc.render(xmlDoc, box, { all: docAll });
   else if (v === 'text') showText();
   else showTree();
-  [...tabs.children].forEach((b) => b.classList.toggle('on', b.dataset.v === v || (v === 'text' && b.dataset.v === 'tree')));
+  const first = special ? 'special' : 'doc';
+  [...tabs.children].forEach((b) => b.classList.toggle('on', b.dataset.v === v || (v === 'text' && b.dataset.v === 'tree') ||
+    (v === 'doc' && b.dataset.v === first)));
 }
 tabs.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setView(b.dataset.v); });
 
 function openFind() {
   if (view === 'tree' && !treeAll) { treeAll = true; showTree(); }
+  if (view === 'doc' && !docAll && XmlDoc.hasLazy) { docAll = true; setView('doc'); }
   finder = UI.find({
-    placeholder: view === 'invoice' ? 'Szukaj na fakturze' : 'Szukaj w XML',
+    placeholder: view === 'special' ? special.find : view === 'doc' ? 'Szukaj w dokumencie' : 'Szukaj w XML',
     onSearch: (q) => { const n = search.run(q); finder.count(n ? 1 : 0, n); },
     onNext: () => { search.next(); finder.count(search.cur + 1, search.hits.length); },
     onPrev: () => { search.prev(); finder.count(search.cur + 1, search.hits.length); },
@@ -162,10 +168,14 @@ UI.bar({
   actions: [{ icon: 'search', label: 'Szukaj', onClick: openFind }],
   menu: () => {
     const m = [];
-    if (invoice) m.push({ icon: 'file', label: 'Widok faktury', checked: view === 'invoice', onClick: () => setView('invoice') });
+    if (special) m.push({ icon: 'file', label: special.menu, checked: view === 'special', onClick: () => setView('special') });
+    m.push({ icon: 'page', label: special ? 'Widok ogólny' : 'Widok dokumentu', checked: view === 'doc', onClick: () => setView('doc') });
     m.push(
       { icon: 'toc', label: 'Drzewo XML', checked: view === 'tree', onClick: () => setView('tree') },
       { icon: 'text', label: 'Tekst XML', checked: view === 'text', onClick: () => setView('text') });
+    if (view === 'special' && special.kind === 'sf') {
+      m.push({ icon: 'chart', label: 'Ukryj pozycje zerowe', checked: SprFin.hideZero, onClick: () => { SprFin.hideZero = !SprFin.hideZero; const y = main.scrollTop; setView('special'); main.scrollTop = y; } });
+    }
     if (view === 'tree') {
       m.push({ icon: 'down', label: 'Rozwiń wszystko', onClick: () => { treeAll = true; showTree(); } });
       m.push({ icon: 'up', label: 'Zwiń wszystko', onClick: () => { treeAll = false; box.querySelectorAll('.n').forEach((n) => n._setOpen && n._setOpen(false)); } });
@@ -189,21 +199,31 @@ function load(forcedEnc) {
     UI.setSub('XML z błędami · ' + encodingLabel(enc));
     return;
   }
-  invoice = Ksef.detect(xmlDoc) ? xmlDoc : null;
-  tabs.hidden = !invoice;
-  document.body.classList.toggle('has-tabs', !!invoice);
+  special = null;
+  if (Ksef.detect(xmlDoc)) {
+    special = { kind: 'ksef', tab: 'Faktura', menu: 'Widok faktury', find: 'Szukaj na fakturze', render: (d, b) => Ksef.render(d, b), info: () => Ksef.info(xmlDoc) };
+  } else if (SprFin.detect(xmlDoc)) {
+    special = { kind: 'sf', tab: 'Sprawozdanie', menu: 'Widok sprawozdania', find: 'Szukaj w sprawozdaniu', render: (d, b) => SprFin.render(d, b), info: () => SprFin.info(xmlDoc) };
+  }
+  tabs.hidden = false;
+  document.body.classList.add('has-tabs');
+  tabs.children[0].dataset.v = special ? 'special' : 'doc';
+  tabs.children[0].textContent = special ? special.tab : 'Dokument';
   const count = xmlDoc.getElementsByTagName('*').length;
   treeAll = count < 300;
-  if (invoice) {
-    UI.setSub('E-faktura KSeF · ' + Ksef.version(xmlDoc));
-    setView('invoice');
-  } else {
-    UI.setSub(`XML · ${count.toLocaleString('pl-PL')} ${plPlural(count, 'element', 'elementy', 'elementów')} · ${encodingLabel(enc)}`);
+  docAll = false;
+  if (special && special.kind === 'ksef') UI.setSub('E-faktura KSeF · ' + Ksef.version(xmlDoc));
+  else if (special) UI.setSub('E-sprawozdanie finansowe');
+  else UI.setSub(`XML · ${count.toLocaleString('pl-PL')} ${plPlural(count, 'element', 'elementy', 'elementów')} · ${encodingLabel(enc)}`);
+  try {
+    setView(special ? 'special' : 'doc');
+  } catch (e) {
+    console.error(e);
     setView('tree');
   }
 }
 
-UI.extraInfo = () => (invoice ? Ksef.info(invoice) : []);
+UI.extraInfo = () => (special ? special.info() : []);
 
 (async () => {
   UI.loading('Otwieranie XML…');

@@ -16,7 +16,9 @@ pliki nie są nigdzie wysyłane.
 | **Excel (XLSX, XLSM, XLSB, XLS), ODS** | siatka z literami kolumn i numerami wierszy, zakładki arkuszy, scalone komórki, podgląd formuły po stuknięciu w komórkę, polski zapis liczb i dat |
 | **CSV** | jak arkusz; samo rozpoznaje kodowanie (UTF-8 / Windows-1250) i separator (`;` `,` tab) |
 | **PowerPoint (PPTX), ODP** | slajdy z motywem, układami, obrazami i tabelami, notatki prelegenta, pokaz slajdów na pełnym ekranie |
-| **XML, e-faktury KSeF** | drzewo i kolorowany tekst; e-faktura FA(2)/FA(3) pokazana jak faktura (pozycje, VAT, do zapłaty, numer konta z „Kopiuj”) |
+| **XML** | widok dokumentu: pola po polsku, powtarzające się rekordy jako tabele, zwijane sekcje, pliki base64 do otwarcia, dane podpisów XAdES; obok drzewo i kolorowany tekst |
+| **E-faktury KSeF** | FA(2)/FA(3) pokazana jak faktura (pozycje, VAT, do zapłaty, numer konta z „Kopiuj”) |
+| **E-sprawozdania finansowe** | jednostki inne: bilans, RZiS, zmiany w kapitale, przepływy z nazwami pozycji z ustawy o rachunkowości, najważniejsze liczby, informacja dodatkowa (PDF do otwarcia), podpisy |
 | **ZIP** | lista plików z folderami; każdy plik z archiwum otwiera się w czytniku |
 | **E-maile (EML, MHT)** | nadawca, odbiorcy, treść (bez skryptów i śledzących obrazków), załączniki otwierane w czytniku |
 | **EPUB** | e-booki: rozdziały, spis treści, zapamiętane miejsce czytania, tryb nocny |
@@ -53,4 +55,4 @@ Nieobsługiwane (z jasnym komunikatem i przyciskiem „Otwórz w innej aplikacji
 - [marked](https://marked.js.org) 18 (MIT) – Markdown
 - [dxf-parser](https://github.com/gdsestimating/dxf-parser) 1.1 (MIT) – odczyt plików DXF
 
-Własne konwertery: ODT/ODP, RTF, PPTX, MIME (e-maile), KSeF, EPUB, rysowanie DXF.
+Własne konwertery: ODT/ODP, RTF, PPTX, MIME (e-maile), KSeF, e-sprawozdania, XML jako dokument, EPUB, rysowanie DXF.

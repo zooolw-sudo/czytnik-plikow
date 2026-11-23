@@ -99,4 +99,3 @@ UI.openBytes = function (name, bytes, source) {
     Bridge.childEnd();
   }, 40);
 };
-window.onChildFailed = () => UI.done();

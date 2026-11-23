@@ -800,6 +800,7 @@ public class MainActivity extends Activity {
         public void childEnd() {
             if (childOut == null) {
                 toast("Nie udało się otworzyć pliku");
+                main.post(() -> web.evaluateJavascript("window.onChildFailed && onChildFailed()", null));
                 return;
             }
             try {

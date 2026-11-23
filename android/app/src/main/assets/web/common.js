@@ -34,6 +34,9 @@ const ICONS = {
   trash: 'M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z',
   lock: 'M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6zm9 14H6V10h12v10zm-6-3c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z',
   warn: 'M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z',
+  attach: 'M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5a2.5 2.5 0 0 1 5 0v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5a2.5 2.5 0 0 0 5 0V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z',
+  sign: 'M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z',
+  chart: 'M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z',
 };
 
 function icon(name) {
@@ -303,6 +306,19 @@ const UI = {
     return n.toLocaleString('pl-PL', { maximumFractionDigits: n < 10 ? 1 : 0 }) + ' ' + u[i];
   },
 
+  /** Otwiera plik zapisany w base64 (np. załącznik w XML) jako plik podrzędny. */
+  openBase64(name, b64, source) {
+    if (!Bridge || !Bridge.childBegin) { UI.toast('Otwieranie plików działa w aplikacji'); return; }
+    UI.loading(`Otwieranie „${name}”…`);
+    setTimeout(() => {
+      const clean = b64.replace(/[^A-Za-z0-9+/=]/g, '');
+      Bridge.childBegin(name, source || 'Plik z ' + FILE.name);
+      const CH = 1024 * 1024; // wielokrotność 4 – każdy kawałek dekoduje się osobno
+      for (let i = 0; i < clean.length; i += CH) Bridge.childChunk(clean.slice(i, i + CH));
+      Bridge.childEnd();
+    }, 40);
+  },
+
   store: {
     get(k, d) { try { const v = localStorage.getItem('cz.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem('cz.' + k, JSON.stringify(v)); } catch (e) { /* bez zapamiętywania */ } },
@@ -472,6 +488,7 @@ class DomSearch {
     this.cur = (i + this.hits.length) % this.hits.length;
     const m = this.hits[this.cur];
     m.classList.add('cur');
+    for (let d = m.closest('details:not([open])'); d; d = d.parentElement && d.parentElement.closest('details:not([open])')) d.open = true;
     m.scrollIntoView({ block: 'center', inline: 'center' });
   }
   next() { this.go(this.cur + 1); }
@@ -590,3 +607,5 @@ class ZoomPane {
     this.tapStart = null;
   }
 }
+
+window.onChildFailed = () => UI.done();
