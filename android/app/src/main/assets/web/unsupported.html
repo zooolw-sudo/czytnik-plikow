@@ -16,9 +16,10 @@
     encrypted: ['Plik chroniony hasłem', 'Ten dokument Office jest zaszyfrowany hasłem. Czytnik nie otwiera zaszyfrowanych plików Word/Excel.'],
     archive: ['Archiwum RAR / 7z', 'Czytnik otwiera archiwa ZIP. Archiwa RAR i 7z rozpakuj w menedżerze plików.'],
     msg: ['Wiadomość Outlook (.msg)', 'Format .msg z Outlooka nie jest obsługiwany. W Outlooku zapisz wiadomość jako .eml albo przekaż ją e-mailem.'],
-    rtf: ['Dokument RTF', 'Format RTF nie jest obsługiwany. Otwórz go w innej aplikacji.'],
+    heic: ['Zdjęcie HEIC', 'Zdjęcia HEIC/HEIF (np. z iPhone’a) czytnik pokazuje na Androidzie 9 lub nowszym. Na tym urządzeniu otwórz je w galerii.'],
+    dwg: ['Rysunek DWG', 'DWG to zamknięty format AutoCADa. Zapisz rysunek jako DXF (np. w AutoCAD, DraftSight lub LibreCAD) – czytnik pokaże go z warstwami.'],
     odf: ['Plik OpenDocument', 'Ten rodzaj pliku OpenDocument (np. rysunek ODG lub formuła) nie jest obsługiwany. Czytnik otwiera dokumenty ODT, arkusze ODS i prezentacje ODP.'],
-    unknown: ['Nieznany typ pliku', 'Czytnik nie rozpoznał tego pliku. Obsługiwane są: PDF, DOCX, ODT, XLSX, XLS, ODS, CSV, pliki tekstowe i obrazy.'],
+    unknown: ['Nieznany typ pliku', 'Czytnik nie rozpoznał tego pliku. Obsługiwane są m.in.: PDF, DOCX, ODT, RTF, XLSX, XLS, ODS, CSV, PPTX, ODP, XML (e-faktury KSeF), ZIP, EML, EPUB, Markdown, HTML, DXF, pliki tekstowe i zdjęcia (także HEIC).'],
   };
   const [title, msg] = MSG[Q.get('reason')] || MSG.unknown;
   UI.bar({});

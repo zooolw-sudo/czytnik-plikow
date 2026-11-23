@@ -75,6 +75,9 @@ final class FileTypes {
         MIME.put("zip", "application/zip");
         MIME.put("rtf", "application/rtf");
         MIME.put("epub", "application/epub+zip");
+        MIME.put("dxf", "image/vnd.dxf");
+        MIME.put("heic", "image/heic");
+        MIME.put("heif", "image/heif");
     }
 
     static String ext(String name) {
@@ -102,6 +105,8 @@ final class FileTypes {
             case "html": return "text/html";
             case "epub": return "application/epub+zip";
             case "pptx": return MIME.get("pptx");
+            case "dxf": return "image/vnd.dxf";
+            case "heic": return "image/heic";
             case "odp": return MIME.get("odp");
             case "rtf": return "application/rtf";
             case "image": return "image/*";
@@ -125,6 +130,13 @@ final class FileTypes {
             if ((head[0] & 0xff) == 0xD0 && (head[1] & 0xff) == 0xCF && (head[2] & 0xff) == 0x11 && (head[3] & 0xff) == 0xE0) {
                 return oleKind(ext, m);
             }
+            if (n >= 12 && head[4] == 'f' && head[5] == 't' && head[6] == 'y' && head[7] == 'p') {
+                String brand = new String(head, 8, 4, StandardCharsets.US_ASCII);
+                if (brand.matches("hei[cxms]|hev[cxms]|mif1|msf1")) return "heic";
+                if (brand.startsWith("avi")) return "image";
+            }
+            if (n >= 6 && head[0] == 'A' && head[1] == 'C' && head[2] == '1' && Character.isDigit(head[3]) && (ext.equals("dwg") || ext.isEmpty())) return "dwg";
+            if (n >= 18 && new String(head, 0, 18, StandardCharsets.US_ASCII).equals("AutoCAD Binary DXF")) return "dxf";
             if ((head[0] & 0xff) == 0xFF && (head[1] & 0xff) == 0xD8 && (head[2] & 0xff) == 0xFF) return "image";
             if ((head[0] & 0xff) == 0x89 && head[1] == 'P' && head[2] == 'N' && head[3] == 'G') return "image";
             if (head[0] == 'G' && head[1] == 'I' && head[2] == 'F' && head[3] == '8') return "image";
@@ -139,12 +151,15 @@ final class FileTypes {
                 || m.equals("application/csv") || m.contains("tab-separated")) return "csv";
         if (ext.equals("svg") || (IMAGE_EXT.contains(ext) && m.startsWith("image/"))) return "image";
         if (XML_EXT.contains(ext)) return "xml";
+        if (ext.equals("dxf")) return "dxf";
+        if (ext.equals("heic") || ext.equals("heif")) return "heic";
         if (ext.equals("eml") || ext.equals("mht") || ext.equals("mhtml") || m.equals("message/rfc822") || m.equals("multipart/related")) return "eml";
         if (ext.equals("md") || ext.equals("markdown") || ext.equals("mkd") || m.equals("text/markdown") || m.equals("text/x-markdown")) return "md";
         if (ext.equals("html") || ext.equals("htm") || ext.equals("xhtml")) return "html";
         String start = textStart(head, n);
         String low = start.toLowerCase(Locale.ROOT);
         if (low.startsWith("<!doctype html") || low.startsWith("<html")) return "html";
+        if (low.matches("(?s)0\\s*\\r?\\nsection\\s*\\r?\\n\\s*2\\s*\\r?\\n.*")) return "dxf";
         if (ext.isEmpty() && looksLikeMail(start)) return "eml";
         if (start.startsWith("<?xml")) {
             String lower = start.toLowerCase(Locale.ROOT);

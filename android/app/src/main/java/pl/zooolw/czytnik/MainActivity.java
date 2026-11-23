@@ -8,8 +8,11 @@ import android.content.ClipboardManager;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.content.UriPermission;
+import android.graphics.Bitmap;
+import android.graphics.ImageDecoder;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -70,6 +73,9 @@ public class MainActivity extends Activity {
     static final class Opened {
         Uri uri;
         File local;
+        /** Wersja do wyświetlenia (np. zdjęcie HEIC zamienione na JPG); udostępniany jest oryginał. */
+        File display;
+        String viewType;
         String name, mime, type, token, recentId, source;
         long size, modified;
     }
@@ -222,6 +228,7 @@ public class MainActivity extends Activity {
             }
             o.mime = FileTypes.mimeFor(o.name, o.type, o.mime);
             o.token = Recents.newId();
+            prepareDisplay(o);
             current = o;
             main.post(() -> showViewer(o));
             remember(o, persisted);
@@ -250,10 +257,13 @@ public class MainActivity extends Activity {
             o.recentId = it.id;
             o.source = "Kopia zapisana w aplikacji";
             o.modified = f.lastModified();
-            current = o;
             it.time = System.currentTimeMillis();
             recents.put(it);
-            showViewer(o);
+            io.execute(() -> {
+                prepareDisplay(o);
+                current = o;
+                main.post(() -> showViewer(o));
+            });
             return;
         }
         if (it.uri != null) {
@@ -385,10 +395,39 @@ public class MainActivity extends Activity {
         return a;
     }
 
+    /** Przygotowanie pliku do pokazania (w tle): zdjęcia HEIC/HEIF zamieniane na JPG. */
+    private void prepareDisplay(Opened o) {
+        if (!"heic".equals(o.type)) return;
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            o.viewType = "heic";
+            return;
+        }
+        try {
+            ImageDecoder.Source src = o.local != null && o.local.isFile()
+                    ? ImageDecoder.createSource(o.local)
+                    : ImageDecoder.createSource(getContentResolver(), o.uri);
+            Bitmap bmp = ImageDecoder.decodeBitmap(src, (decoder, info, source) -> {
+                decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE);
+                int max = Math.max(info.getSize().getWidth(), info.getSize().getHeight());
+                if (max > 4096) decoder.setTargetSampleSize((int) Math.ceil(max / 4096.0));
+            });
+            File out = new File(childDir, Recents.newId() + ".jpg");
+            try (OutputStream os = new FileOutputStream(out)) {
+                bmp.compress(Bitmap.CompressFormat.JPEG, 90, os);
+            }
+            bmp.recycle();
+            o.display = out;
+            o.viewType = "image";
+        } catch (Exception | OutOfMemoryError e) {
+            o.viewType = "heic";
+        }
+    }
+
     private void showViewer(Opened o) {
         String page;
         String extra = "";
-        switch (o.type) {
+        String t = o.viewType != null ? o.viewType : o.type;
+        switch (t) {
             case "pdf": page = "pdf.html"; break;
             case "docx": page = "docx.html"; break;
             case "odt": page = "odt.html"; break;
@@ -409,7 +448,7 @@ public class MainActivity extends Activity {
         String url = BASE + "web/" + page
                 + "?src=" + enc("/file/" + o.token)
                 + "&name=" + enc(o.name)
-                + "&type=" + enc(o.type)
+                + "&type=" + enc(t)
                 + "&size=" + Math.max(0, o.size)
                 + extra;
         inViewer = true;
@@ -463,6 +502,7 @@ public class MainActivity extends Activity {
             }
             o.mime = FileTypes.mimeFor(name, o.type, null);
             o.token = Recents.newId();
+            prepareDisplay(o);
             main.post(() -> {
                 Opened parent = current;
                 if (parent != null) parents.push(parent);
@@ -833,11 +873,11 @@ public class MainActivity extends Activity {
         if (slash >= 0) token = token.substring(0, slash);
         if (o == null || !token.equals(o.token)) return error(404, "Not Found");
         try {
-            InputStream in = o.local != null && o.local.isFile()
-                    ? new FileInputStream(o.local)
+            InputStream in = o.display != null && o.display.isFile() ? new FileInputStream(o.display)
+                    : o.local != null && o.local.isFile() ? new FileInputStream(o.local)
                     : getContentResolver().openInputStream(o.uri);
             if (in == null) return error(404, "Not Found");
-            String mime = "image".equals(o.type) && o.mime.contains("*") ? "image/png" : o.mime;
+            String mime = o.display != null ? "image/jpeg" : "image".equals(o.type) && o.mime.contains("*") ? "image/png" : o.mime;
             return new WebResourceResponse(mime, null, 200, "OK", headers(), in);
         } catch (Exception e) {
             return error(404, "Not Found");

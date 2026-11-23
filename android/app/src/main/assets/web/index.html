@@ -49,8 +49,8 @@
 <script src="common.js"></script>
 <script>
   'use strict';
-  const COLORS = { pdf: '#e0483b', docx: '#2b67d1', odt: '#1d8bd0', sheet: '#1e9a57', csv: '#139a8f', text: '#6b7486', xml: '#d9822b', zip: '#a0702a', image: '#8b5cf6', unsupported: '#8a93a3' };
-  const FORMATS = [['PDF', 'pdf'], ['DOCX', 'docx'], ['ODT', 'odt'], ['XLSX', 'sheet'], ['XLS', 'sheet'], ['ODS', 'sheet'], ['PPTX', 'pdf'], ['ODP', 'pdf'], ['CSV', 'csv'], ['XML / e-faktury', 'xml'], ['ZIP', 'zip'], ['EML', 'text'], ['EPUB', 'odt'], ['RTF', 'docx'], ['MD', 'text'], ['HTML', 'text'], ['TXT', 'text'], ['JPG/PNG', 'image']];
+  const COLORS = { pdf: '#e0483b', docx: '#2b67d1', odt: '#1d8bd0', sheet: '#1e9a57', csv: '#139a8f', text: '#6b7486', xml: '#d9822b', zip: '#a0702a', image: '#8b5cf6', heic: '#8b5cf6', eml: '#5b6b85', md: '#6b7486', html: '#e66a2c', epub: '#1d8bd0', rtf: '#2b67d1', pptx: '#d24726', odp: '#d24726', dxf: '#d9822b', unsupported: '#8a93a3' };
+  const FORMATS = [['PDF', 'pdf'], ['DOCX', 'docx'], ['ODT', 'odt'], ['XLSX', 'sheet'], ['XLS', 'sheet'], ['ODS', 'sheet'], ['PPTX', 'pptx'], ['ODP', 'odp'], ['CSV', 'csv'], ['XML / e-faktury', 'xml'], ['ZIP', 'zip'], ['EML', 'text'], ['EPUB', 'odt'], ['RTF', 'docx'], ['MD', 'text'], ['HTML', 'text'], ['DXF', 'xml'], ['TXT', 'text'], ['JPG/PNG/HEIC', 'image']];
 
   UI.bar({
     home: true,
@@ -119,8 +119,11 @@
       title: 'Czytnik plików',
       body: h('div', { html:
         'Przeglądarka dokumentów działająca bez internetu – pliki nie są nigdzie wysyłane.<br><br>' +
-        '<b>Obsługiwane:</b> PDF, Word (DOCX), OpenDocument (ODT, ODS), Excel (XLSX, XLSM, XLSB, XLS), CSV, pliki tekstowe, obrazy.<br><br>' +
-        '<span style="color:var(--muted);font-size:13px">Wykorzystuje biblioteki open source: pdf.js (Mozilla), docx-preview, SheetJS, JSZip.</span>' }),
+        '<b>Dokumenty:</b> PDF, Word (DOCX), RTF, OpenDocument (ODT), e-booki EPUB, Markdown, HTML.<br>' +
+        '<b>Arkusze:</b> Excel (XLSX, XLSM, XLSB, XLS), ODS, CSV.<br>' +
+        '<b>Prezentacje:</b> PowerPoint (PPTX), ODP.<br>' +
+        '<b>Inne:</b> XML i e-faktury KSeF, archiwa ZIP, e-maile EML, rysunki DXF, pliki tekstowe, zdjęcia (także HEIC).<br><br>' +
+        '<span style="color:var(--muted);font-size:13px">Wykorzystuje biblioteki open source: pdf.js (Mozilla), docx-preview, SheetJS, JSZip, DOMPurify, marked, dxf-parser.</span>' }),
       buttons: [{ label: 'OK', primary: true }],
     });
   }
