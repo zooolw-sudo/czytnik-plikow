@@ -116,6 +116,8 @@ final class FileTypes {
                     && head[8] == 'W' && head[9] == 'E' && head[10] == 'B' && head[11] == 'P') return "image";
             if (head[0] == 'B' && head[1] == 'M' && (ext.equals("bmp") || m.startsWith("image/"))) return "image";
             if (head[0] == '{' && head[1] == '\\' && head[2] == 'r' && head[3] == 't') return "rtf";
+            if (head[0] == 'R' && head[1] == 'a' && head[2] == 'r' && head[3] == '!') return "archive";
+            if (head[0] == '7' && head[1] == 'z' && (head[2] & 0xff) == 0xBC && (head[3] & 0xff) == 0xAF) return "archive";
         }
         if (ext.equals("csv") || ext.equals("tsv") || m.equals("text/csv") || m.equals("text/comma-separated-values")
                 || m.equals("application/csv") || m.contains("tab-separated")) return "csv";

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Archiwum</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  #main { padding: 0 0 30px; }
+  .crumbs {
+    display: flex; align-items: center; gap: 4px; overflow-x: auto; white-space: nowrap;
+    padding: 10px 12px; font-size: 14px; color: var(--muted); scrollbar-width: none;
+  }
+  .crumbs button { border: 0; background: var(--card); color: var(--accent); border-radius: 8px; padding: 6px 10px; font-weight: 600; font-size: 13.5px; }
+  .crumbs button:last-child { color: var(--text); }
+  .list { background: var(--card); margin: 0 10px; border-radius: 16px; overflow: hidden; box-shadow: 0 1px 3px rgba(0, 0, 0, .08); }
+  .it { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  .it:last-child { border-bottom: 0; }
+  .it:active { background: var(--accent-soft); }
+  .ico { flex: none; width: 40px; height: 40px; border-radius: 9px; display: grid; place-items: center; color: #fff; font-size: 10.5px; font-weight: 800; }
+  .ico svg { width: 24px; height: 24px; fill: #fff; }
+  .it .t { flex: 1; min-width: 0; }
+  .it .nm { font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .it .meta { font-size: 12.5px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .it .chev { color: var(--muted); font-size: 20px; }
+  .empty { padding: 30px 16px; text-align: center; color: var(--muted); }
+  .warn { margin: 10px; padding: 10px 12px; border-radius: 10px; background: rgba(214, 69, 69, .12); color: var(--danger); font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="main" id="main"><div class="crumbs" id="crumbs"></div><div id="warn"></div><div class="list" id="list"></div></div>
+<script src="common.js"></script>
+<script src="lib/jszip.min.js"></script>
+<script>
+  'use strict';
+  const COLORS = { pdf: '#e0483b', doc: '#2b67d1', odt: '#1d8bd0', xls: '#1e9a57', csv: '#139a8f', img: '#8b5cf6', xml: '#d9822b', zip: '#a0702a', txt: '#6b7486', other: '#8a93a3' };
+  const KIND = {
+    pdf: 'pdf', docx: 'doc', docm: 'doc', doc: 'doc', rtf: 'doc', odt: 'odt', ods: 'xls', xlsx: 'xls', xlsm: 'xls', xls: 'xls', xlsb: 'xls',
+    csv: 'csv', tsv: 'csv', jpg: 'img', jpeg: 'img', png: 'img', gif: 'img', webp: 'img', bmp: 'img', heic: 'img', svg: 'img',
+    xml: 'xml', zip: 'zip', rar: 'zip', '7z': 'zip', txt: 'txt', md: 'txt', log: 'txt', json: 'txt', eml: 'txt', html: 'txt', htm: 'txt',
+  };
+  const stateKey = 'zipdir:' + FILE.src;
+  let entries = [], charset = 'UTF-8', dir = '', finder = null, query = '';
+  const listEl = document.getElementById('list');
+
+  UI.bar({
+    actions: [{ icon: 'search', label: 'Szukaj', onClick: () => {
+      finder = UI.find({
+        placeholder: 'Szukaj nazwy pliku',
+        onSearch: (q) => { query = q; render(); },
+        onNext: () => {}, onPrev: () => {},
+        onClose: () => { query = ''; finder = null; render(); },
+      });
+    } }],
+  });
+
+  // ukryte śmieci z macOS
+  const junk = (p) => /(^|\/)__MACOSX\//.test(p) || /(^|\/)\._/.test(p) || /(^|\/)\.DS_Store$/.test(p);
+
+  /** Buduje listę folderów na podstawie pełnych ścieżek (archiwa nie zawsze mają wpisy katalogów). */
+  function folderContents(prefix) {
+    const folders = new Map(), files = [];
+    for (const e of entries) {
+      if (!e.p.startsWith(prefix) || e.p === prefix) continue;
+      const rest = e.p.slice(prefix.length);
+      const slash = rest.indexOf('/');
+      if (slash >= 0) {
+        const name = rest.slice(0, slash);
+        const f = folders.get(name) || { name, count: 0, size: 0 };
+        if (!e.d) { f.count++; f.size += e.s; }
+        folders.set(name, f);
+      } else if (!e.d) files.push(e);
+    }
+    return { folders: [...folders.values()].sort((a, b) => a.name.localeCompare(b.name, 'pl')), files: files.sort((a, b) => a.p.localeCompare(b.p, 'pl')) };
+  }
+
+  const ext = (p) => (p.includes('.') ? p.split('.').pop().toLowerCase() : '');
+  const base = (p) => p.replace(/\/$/, '').split('/').pop();
+  const when = (t) => (t > 0 ? new Date(t).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+
+  function fileRow(e, showPath) {
+    const x = ext(e.p);
+    const k = KIND[x] || 'other';
+    return h('div', { class: 'it', onclick: () => openEntry(e) },
+      h('div', { class: 'ico', style: `background:${COLORS[k]}`, text: (x || '?').toUpperCase().slice(0, 4) }),
+      h('div', { class: 't' }, h('div', { class: 'nm', text: base(e.p) }),
+        h('div', { class: 'meta', text: [showPath ? e.p.slice(0, -base(e.p).length) : null, UI.formatSize(e.s), when(e.t)].filter(Boolean).join(' · ') })));
+  }
+
+  function render() {
+    listEl.innerHTML = '';
+    const crumbs = document.getElementById('crumbs');
+    crumbs.innerHTML = '';
+    if (query) {
+      crumbs.append(h('span', { text: 'Wyniki szukania' }));
+      const q = foldText(query);
+      const res = entries.filter((e) => !e.d && foldText(base(e.p)).includes(q));
+      if (finder) finder.count(res.length ? res.length : 0, res.length);
+      if (!res.length) listEl.append(h('div', { class: 'empty', text: 'Brak plików o takiej nazwie.' }));
+      for (const e of res.slice(0, 500)) listEl.append(fileRow(e, true));
+      return;
+    }
+    const parts = dir ? dir.replace(/\/$/, '').split('/') : [];
+    crumbs.append(h('button', { text: FILE.name.length > 28 ? FILE.name.slice(0, 26) + '…' : FILE.name, onclick: () => go('') }));
+    parts.forEach((p, i) => {
+      crumbs.append(h('span', { text: '›' }), h('button', { text: p, onclick: () => go(parts.slice(0, i + 1).join('/') + '/') }));
+    });
+    const { folders, files } = folderContents(dir);
+    if (!folders.length && !files.length) listEl.append(h('div', { class: 'empty', text: 'Ten folder jest pusty.' }));
+    for (const f of folders) {
+      listEl.append(h('div', { class: 'it', onclick: () => go(dir + f.name + '/') },
+        h('div', { class: 'ico', style: 'background:#e9b949', html: icon('folder') }),
+        h('div', { class: 't' }, h('div', { class: 'nm', text: f.name }),
+          h('div', { class: 'meta', text: `${f.count} ${plPlural(f.count, 'plik', 'pliki', 'plików')} · ${UI.formatSize(f.size)}` })),
+        h('span', { class: 'chev', text: '›' })));
+    }
+    for (const e of files) listEl.append(fileRow(e, false));
+    crumbs.lastChild.scrollIntoView({ inline: 'end', block: 'nearest' });
+  }
+
+  function go(d) {
+    dir = d;
+    try { sessionStorage.setItem(stateKey, d); } catch (e) { /* bez pamiętania folderu */ }
+    document.getElementById('main').scrollTop = 0;
+    render();
+  }
+
+  function openEntry(e) {
+    if (!Bridge) { UI.toast('Otwieranie plików z archiwum działa w aplikacji'); return; }
+    UI.loading(`Rozpakowuję „${base(e.p)}”…`);
+    Bridge.zipOpen(e.p, charset);
+  }
+  window.onChildFailed = () => UI.done();
+
+  // Wstecz najpierw wychodzi z podfolderu
+  window.onBackExtra = () => {
+    if (!dir) return false;
+    const parts = dir.replace(/\/$/, '').split('/');
+    parts.pop();
+    go(parts.length ? parts.join('/') + '/' : '');
+    return true;
+  };
+
+  async function listInBrowser() {
+    const zip = await JSZip.loadAsync(await UI.fetchFile());
+    const out = [];
+    zip.forEach((p, f) => out.push({ p, d: f.dir, s: f._data && f._data.uncompressedSize || 0, t: f.date ? f.date.getTime() : 0 }));
+    return { entries: out, charset: 'UTF-8' };
+  }
+
+  (async () => {
+    UI.loading('Czytam zawartość archiwum…');
+    await new Promise((r) => setTimeout(r, 30));
+    try {
+      const res = Bridge ? JSON.parse(Bridge.zipList()) : await listInBrowser();
+      entries = (res.entries || []).filter((e) => !junk(e.p));
+      charset = res.charset || 'UTF-8';
+      if (res.error) document.getElementById('warn').append(h('div', { class: 'warn', text: 'Archiwum może być uszkodzone: ' + res.error + (entries.length ? ' (pokazano pliki odczytane przed błędem)' : '') }));
+      const files = entries.filter((e) => !e.d);
+      const total = files.reduce((a, e) => a + e.s, 0);
+      UI.setSub(`Archiwum ZIP · ${files.length} ${plPlural(files.length, 'plik', 'pliki', 'plików')} · ${UI.formatSize(total)} po rozpakowaniu`);
+      UI.extraInfo = () => [['Pliki w archiwum', String(files.length)], ['Po rozpakowaniu', UI.formatSize(total)], ['Kodowanie nazw', charset]];
+      let saved = '';
+      try { saved = sessionStorage.getItem(stateKey) || ''; } catch (e) { /* nic */ }
+      // jeśli archiwum ma jeden folder główny, od razu do niego wchodzimy
+      if (!saved) {
+        const top = folderContents('');
+        if (top.folders.length === 1 && !top.files.length) saved = top.folders[0].name + '/';
+      }
+      dir = saved;
+      render();
+      UI.done();
+      if (res.error && !entries.length) UI.fail('Nie udało się otworzyć archiwum', res.error);
+    } catch (e) {
+      console.error(e);
+      UI.fail('Nie udało się otworzyć archiwum', String(e && e.message || e));
+    }
+  })();
+</script>
+</body>
+</html>

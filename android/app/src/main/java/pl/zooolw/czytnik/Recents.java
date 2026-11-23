@@ -77,6 +77,28 @@ final class Recents {
         return d;
     }
 
+    /** Katalog na pliki wyjęte z archiwów/załączników – osobny dla każdego okna, sprzątany. */
+    static File childrenDir(Context c, String instance) {
+        File root = new File(c.getCacheDir(), "otwarte");
+        File[] old = root.listFiles();
+        long now = System.currentTimeMillis();
+        if (old != null) {
+            for (File f : old) if (now - f.lastModified() > 24L * 3600 * 1000) deleteTree(f);
+        }
+        File d = new File(root, instance);
+        //noinspection ResultOfMethodCallIgnored
+        d.mkdirs();
+        return d;
+    }
+
+    static void deleteTree(File f) {
+        if (f == null || !f.exists()) return;
+        File[] kids = f.listFiles();
+        if (kids != null) for (File k : kids) deleteTree(k);
+        //noinspection ResultOfMethodCallIgnored
+        f.delete();
+    }
+
     static String newId() {
         return UUID.randomUUID().toString().replace("-", "").substring(0, 16);
     }

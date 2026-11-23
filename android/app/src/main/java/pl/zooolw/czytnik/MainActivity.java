@@ -16,6 +16,7 @@ import android.os.Looper;
 import android.os.Parcelable;
 import android.provider.DocumentsContract;
 import android.provider.OpenableColumns;
+import android.util.Base64;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -25,6 +26,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -37,11 +39,18 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipException;
+import java.util.zip.ZipInputStream;
 
 /**
  * Jedyny ekran aplikacji. Interfejs (ekran startowy i przeglądarki formatów) to strony
@@ -70,14 +79,21 @@ public class MainActivity extends Activity {
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private Recents recents;
     private volatile Opened current;
+    /** Pliki „nadrzędne” – np. archiwum ZIP, z którego otwarto plik; Wstecz wraca do nich. */
+    private final Deque<Opened> parents = new ArrayDeque<>();
     private boolean externalLaunch;
     private boolean inViewer;
+    private File childDir;
+    private FileOutputStream childOut;
+    private File childFile;
+    private String childName, childSource;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         recents = new Recents(this);
+        childDir = Recents.childrenDir(this, Recents.newId());
 
         web = new WebView(this);
         web.setBackgroundColor(getResources().getColor(R.color.bg, getTheme()));
@@ -105,6 +121,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         io.shutdownNow();
+        Recents.deleteTree(childDir);
         if (web != null) {
             web.removeJavascriptInterface("App");
             web.destroy();
@@ -145,6 +162,7 @@ public class MainActivity extends Activity {
     private void loadHome() {
         inViewer = false;
         current = null;
+        parents.clear();
         web.loadUrl(BASE + "web/index.html");
     }
 
@@ -377,6 +395,7 @@ public class MainActivity extends Activity {
             case "sheet": case "csv": page = "sheet.html"; break;
             case "text": page = "text.html"; break;
             case "xml": page = "xml.html"; break;
+            case "zip": page = "zip.html"; break;
             case "image": page = "image.html"; break;
             default:
                 page = "unsupported.html";
@@ -409,8 +428,157 @@ public class MainActivity extends Activity {
     }
 
     private void navigateBack() {
+        if (inViewer && !parents.isEmpty()) {
+            current = parents.pop();
+            showViewer(current);
+            return;
+        }
         if (inViewer && !externalLaunch) loadHome();
         else finish();
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Pliki podrzędne: zawartość archiwów ZIP i załączniki e-maili         */
+    /* ------------------------------------------------------------------ */
+
+    /** Otwiera plik wyjęty z innego pliku; Wstecz wraca do pliku nadrzędnego. */
+    private void openChild(File f, String name, String source) {
+        io.execute(() -> {
+            Opened o = new Opened();
+            o.local = f;
+            o.name = name;
+            o.size = f.length();
+            o.modified = f.lastModified();
+            o.source = source;
+            try (InputStream in = new FileInputStream(f)) {
+                o.type = FileTypes.detect(in, name, null);
+            } catch (IOException e) {
+                toast("Nie udało się otworzyć pliku");
+                return;
+            }
+            o.mime = FileTypes.mimeFor(name, o.type, null);
+            o.token = Recents.newId();
+            main.post(() -> {
+                Opened parent = current;
+                if (parent != null) parents.push(parent);
+                current = o;
+                showViewer(o);
+            });
+        });
+    }
+
+    private static String baseName(String path) {
+        String p = path.endsWith("/") ? path.substring(0, path.length() - 1) : path;
+        return p.substring(p.lastIndexOf('/') + 1);
+    }
+
+    private InputStream openCurrent(Opened o) throws IOException {
+        InputStream in = o.local != null && o.local.isFile() ? new FileInputStream(o.local) : getContentResolver().openInputStream(o.uri);
+        if (in == null) throw new IOException("Brak danych");
+        return in;
+    }
+
+    /** Nazwy w archiwach z polskiego Windowsa bywają w kodowaniu CP852 zamiast UTF-8. */
+    private static final String[] ZIP_CHARSETS = {"UTF-8", "IBM852", "windows-1250", "ISO-8859-1"};
+
+    private Charset zipCharset(String name) {
+        try {
+            return Charset.forName(name);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String zipList() {
+        Opened o = current;
+        if (o == null) return "{\"error\":\"Brak pliku\"}";
+        for (String csName : ZIP_CHARSETS) {
+            Charset cs = zipCharset(csName);
+            if (cs == null) continue;
+            JSONArray arr = new JSONArray();
+            try (ZipInputStream z = new ZipInputStream(openCurrent(o), cs)) {
+                ZipEntry e;
+                int count = 0;
+                byte[] skip = new byte[64 * 1024];
+                while ((e = z.getNextEntry()) != null && count++ < 20000) {
+                    long size = e.getSize();
+                    if (!e.isDirectory() && size < 0) {
+                        size = 0;
+                        int r;
+                        while ((r = z.read(skip)) > 0) size += r;
+                    }
+                    JSONObject j = new JSONObject();
+                    j.put("p", e.getName());
+                    j.put("d", e.isDirectory());
+                    j.put("s", size);
+                    j.put("t", e.getTime());
+                    arr.put(j);
+                }
+                JSONObject res = new JSONObject();
+                res.put("entries", arr);
+                res.put("charset", csName);
+                return res.toString();
+            } catch (IllegalArgumentException bad) {
+                // błędne nazwy w tym kodowaniu – próbujemy następnego
+            } catch (Exception ex) {
+                try {
+                    JSONObject res = new JSONObject();
+                    res.put("error", ex.getMessage() == null ? "Uszkodzone archiwum" : ex.getMessage());
+                    res.put("entries", arr);
+                    return res.toString();
+                } catch (JSONException ignored) {
+                    return "{\"error\":\"Uszkodzone archiwum\"}";
+                }
+            }
+        }
+        return "{\"error\":\"Nie udało się odczytać nazw plików w archiwum\"}";
+    }
+
+    private void zipOpen(String path, String charset) {
+        Opened o = current;
+        if (o == null) return;
+        io.execute(() -> {
+            Charset cs = zipCharset(charset == null ? "UTF-8" : charset);
+            File out = new File(childDir, Recents.newId() + ".bin");
+            boolean found = false;
+            try (ZipInputStream z = new ZipInputStream(openCurrent(o), cs == null ? StandardCharsets.UTF_8 : cs)) {
+                ZipEntry e;
+                while ((e = z.getNextEntry()) != null) {
+                    if (!e.getName().equals(path)) continue;
+                    found = true;
+                    try (OutputStream os = new FileOutputStream(out)) {
+                        byte[] buf = new byte[64 * 1024];
+                        long total = 0;
+                        int r;
+                        while ((r = z.read(buf)) > 0) {
+                            os.write(buf, 0, r);
+                            total += r;
+                            if (total > 1024L * 1024 * 1024) throw new IOException("Plik po rozpakowaniu jest za duży");
+                        }
+                    }
+                    break;
+                }
+            } catch (ZipException ze) {
+                //noinspection ResultOfMethodCallIgnored
+                out.delete();
+                String m = ze.getMessage() == null ? "" : ze.getMessage();
+                toast(m.contains("encrypt") ? "Ten plik w archiwum jest zaszyfrowany hasłem" : "Nie udało się rozpakować pliku");
+                main.post(() -> web.evaluateJavascript("window.onChildFailed && onChildFailed()", null));
+                return;
+            } catch (Exception ex) {
+                //noinspection ResultOfMethodCallIgnored
+                out.delete();
+                toast("Nie udało się rozpakować pliku");
+                main.post(() -> web.evaluateJavascript("window.onChildFailed && onChildFailed()", null));
+                return;
+            }
+            if (!found) {
+                toast("Nie znaleziono pliku w archiwum");
+                main.post(() -> web.evaluateJavascript("window.onChildFailed && onChildFailed()", null));
+                return;
+            }
+            openChild(out, baseName(path), "Archiwum " + o.name);
+        });
     }
 
     /** Adres pliku, który można przekazać innej aplikacji. */
@@ -543,6 +711,58 @@ public class MainActivity extends Activity {
             } catch (JSONException ignored) {
             }
             return j.toString();
+        }
+
+        @JavascriptInterface
+        public String zipList() {
+            return MainActivity.this.zipList();
+        }
+
+        @JavascriptInterface
+        public void zipOpen(String path, String charset) {
+            MainActivity.this.zipOpen(path, charset);
+        }
+
+        /** Przekazanie pliku ze strony (np. załącznika e-maila) w kawałkach base64. */
+        @JavascriptInterface
+        public void childBegin(String name, String source) {
+            try {
+                if (childOut != null) childOut.close();
+                childFile = new File(childDir, Recents.newId() + ".bin");
+                childOut = new FileOutputStream(childFile);
+                childName = name == null || name.isEmpty() ? "plik" : name;
+                childSource = source;
+            } catch (IOException e) {
+                childOut = null;
+            }
+        }
+
+        @JavascriptInterface
+        public void childChunk(String b64) {
+            if (childOut == null) return;
+            try {
+                childOut.write(Base64.decode(b64, Base64.DEFAULT));
+            } catch (Exception e) {
+                try {
+                    childOut.close();
+                } catch (IOException ignored) {
+                }
+                childOut = null;
+            }
+        }
+
+        @JavascriptInterface
+        public void childEnd() {
+            if (childOut == null) {
+                toast("Nie udało się otworzyć pliku");
+                return;
+            }
+            try {
+                childOut.close();
+            } catch (IOException ignored) {
+            }
+            childOut = null;
+            openChild(childFile, childName, childSource);
         }
 
         @JavascriptInterface

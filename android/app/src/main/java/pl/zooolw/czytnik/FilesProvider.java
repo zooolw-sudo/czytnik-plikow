@@ -24,23 +24,39 @@ public class FilesProvider extends ContentProvider {
         return c.getPackageName() + ".pliki";
     }
 
+    /**
+     * Adresy: /k/&lt;kopia&gt;/&lt;nazwa&gt; – kopie z listy ostatnich,
+     *         /t/&lt;okno&gt;/&lt;plik&gt;/&lt;nazwa&gt; – pliki wyjęte z archiwów i załączników.
+     */
     static Uri uriFor(Context c, File f, String displayName) {
-        return new Uri.Builder().scheme("content").authority(authority(c))
-                .appendPath(f.getName()).appendPath(displayName == null ? f.getName() : displayName).build();
+        Uri.Builder b = new Uri.Builder().scheme("content").authority(authority(c));
+        File parent = f.getParentFile();
+        if (parent != null && parent.equals(Recents.copiesDir(c))) {
+            b.appendPath("k").appendPath(f.getName());
+        } else {
+            b.appendPath("t").appendPath(parent == null ? "" : parent.getName()).appendPath(f.getName());
+        }
+        return b.appendPath(displayName == null ? f.getName() : displayName).build();
+    }
+
+    private static boolean safe(String s) {
+        return s != null && !s.isEmpty() && !s.contains("/") && !s.contains("..");
     }
 
     private File fileFor(Uri uri) {
         List<String> seg = uri.getPathSegments();
-        if (seg.isEmpty()) return null;
-        String n = seg.get(0);
-        if (n.contains("/") || n.contains("..")) return null;
-        File f = new File(Recents.copiesDir(getContext()), n);
-        return f.isFile() ? f : null;
+        File f = null;
+        if (seg.size() >= 3 && "k".equals(seg.get(0)) && safe(seg.get(1))) {
+            f = new File(Recents.copiesDir(getContext()), seg.get(1));
+        } else if (seg.size() >= 4 && "t".equals(seg.get(0)) && safe(seg.get(1)) && safe(seg.get(2))) {
+            f = new File(new File(new File(getContext().getCacheDir(), "otwarte"), seg.get(1)), seg.get(2));
+        }
+        return f != null && f.isFile() ? f : null;
     }
 
     private static String displayName(Uri uri) {
         List<String> seg = uri.getPathSegments();
-        return seg.size() > 1 ? seg.get(1) : (seg.isEmpty() ? "plik" : seg.get(0));
+        return seg.isEmpty() ? "plik" : seg.get(seg.size() - 1);
     }
 
     @Override
