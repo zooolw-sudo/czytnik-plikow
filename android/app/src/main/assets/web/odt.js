@@ -15,6 +15,7 @@ const OdtNS = {
   fo: 'urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0',
   xlink: 'http://www.w3.org/1999/xlink',
   svg: 'urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0',
+  presentation: 'urn:oasis:names:tc:opendocument:xmlns:presentation:1.0',
 };
 
 const odtIs = (n, ns, local) => n && n.nodeType === 1 && n.namespaceURI === OdtNS[ns] && n.localName === local;
@@ -44,7 +45,8 @@ class OdtStyles {
   static props(styleEl) {
     const p = {};
     for (const k of odtKids(styleEl)) {
-      if (k.namespaceURI !== OdtNS.style) continue;
+      // LibreOffice zapisuje część właściwości (np. wypełnienie komórek) w przestrzeni loext
+      if (k.namespaceURI !== OdtNS.style && k.namespaceURI !== 'urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0') continue;
       const kind = k.localName.replace('-properties', '');   // text, paragraph, table-cell…
       const bag = p[kind] || (p[kind] = {});
       for (const a of Array.from(k.attributes)) bag[a.localName] = a.value;
@@ -168,10 +170,12 @@ function odtTextCss(t, styles) {
   if (t['font-variant']) c += `font-variant:${t['font-variant']};`;
   if (t['letter-spacing'] && t['letter-spacing'] !== 'normal') c += `letter-spacing:${t['letter-spacing']};`;
   if (t['text-position']) {
+    // „0% 100%” oznacza zwykły tekst – rozmiar zmieniamy tylko dla indeksów
     const [pos, size] = t['text-position'].split(/\s+/);
-    if (pos === 'super' || parseFloat(pos) > 0) c += 'vertical-align:super;';
-    else if (pos === 'sub' || parseFloat(pos) < 0) c += 'vertical-align:sub;';
-    if (size) c += `font-size:${size};`;
+    const up = pos === 'super' || parseFloat(pos) > 0, down = pos === 'sub' || parseFloat(pos) < 0;
+    if (up) c += 'vertical-align:super;';
+    else if (down) c += 'vertical-align:sub;';
+    if ((up || down) && size) c += `font-size:${size};`;
   }
   if (t['display'] === 'none') c += 'display:none;';
   return c;
@@ -229,6 +233,11 @@ class OdtConverter {
       css = odtBoxCss(c);
       const va = { top: 'top', middle: 'middle', bottom: 'bottom' }[c['vertical-align']];
       if (va) css += `vertical-align:${va};`;
+      // komórki tabel w prezentacjach mają wypełnienie we właściwościach graficznych
+      const g = r.graphic || {};
+      if (g.fill === 'solid' && g['fill-color']) css += `background-color:${g['fill-color']};`;
+      for (const k of ['padding-top', 'padding-bottom', 'padding-left', 'padding-right']) if (g[k] && !c[k] && !c.padding) css += `${k}:${g[k]};`;
+      if (g['textarea-vertical-align'] && !va) css += `vertical-align:${g['textarea-vertical-align']};`;
       css += odtTextCss(r.text, this.st) + odtParaCss(r.paragraph);
     } else if (kind === 'table') {
       const t = r.table || {};
@@ -325,7 +334,9 @@ class OdtConverter {
       const header = odtIs(it, 'text', 'list-header');
       if (!odtIs(it, 'text', 'list-item') && !header) continue;
       const li = h('li');
-      if (header) li.style.listStyleType = 'none';
+      // element zawierający tylko podlistę nie ma własnego punktora
+      const onlyNested = odtKids(it).every((k) => odtIs(k, 'text', 'list') || odtIs(k, 'text', 'soft-page-break'));
+      if (header || onlyNested) li.style.listStyleType = 'none';
       const sv = odtAttr(it, 'text', 'start-value');
       if (sv && lv.type === 'number') li.value = Number(sv);
       for (const k of odtKids(it)) {
@@ -381,11 +392,12 @@ class OdtConverter {
 
   row(r) {
     const tr = h('tr', { class: this.cls(odtAttr(r, 'table', 'style-name'), 'table-row', 'row') });
+    const rowDefault = odtAttr(r, 'table', 'default-cell-style-name');
     for (const c of odtKids(r)) {
       if (!odtIs(c, 'table', 'table-cell')) continue;
       const rep = Math.min(64, Number(odtAttr(c, 'table', 'number-columns-repeated')) || 1);
       for (let i = 0; i < rep; i++) {
-        const td = h('td', { class: this.cls(odtAttr(c, 'table', 'style-name'), 'table-cell', 'cell') });
+        const td = h('td', { class: this.cls(odtAttr(c, 'table', 'style-name') || rowDefault, 'table-cell', 'cell') });
         const cs = Number(odtAttr(c, 'table', 'number-columns-spanned')) || 1;
         const rs = Number(odtAttr(c, 'table', 'number-rows-spanned')) || 1;
         if (cs > 1) td.colSpan = cs;

@@ -70,6 +70,8 @@ final class FileTypes {
         MIME.put("svg", "image/svg+xml");
         MIME.put("pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation");
         MIME.put("ppt", "application/vnd.ms-powerpoint");
+        MIME.put("ppsx", "application/vnd.openxmlformats-officedocument.presentationml.slideshow");
+        MIME.put("odp", "application/vnd.oasis.opendocument.presentation");
         MIME.put("zip", "application/zip");
         MIME.put("rtf", "application/rtf");
         MIME.put("epub", "application/epub+zip");
@@ -99,6 +101,8 @@ final class FileTypes {
             case "md": return "text/markdown";
             case "html": return "text/html";
             case "epub": return "application/epub+zip";
+            case "pptx": return MIME.get("pptx");
+            case "odp": return MIME.get("odp");
             case "rtf": return "application/rtf";
             case "image": return "image/*";
             default: return "application/octet-stream";
@@ -185,11 +189,12 @@ final class FileTypes {
                     if (mt.startsWith("application/vnd.oasis.opendocument.text")) return "odt";
                     if (mt.startsWith("application/vnd.oasis.opendocument.spreadsheet")) return "sheet";
                     if (mt.startsWith("application/epub+zip")) return "epub";
+                    if (mt.startsWith("application/vnd.oasis.opendocument.presentation")) return "odp";
                     return "odf";
                 }
                 if (nm.startsWith("word/")) return "docx";
                 if (nm.startsWith("xl/")) return "sheet";
-                if (nm.startsWith("ppt/")) return "ppt";
+                if (nm.startsWith("ppt/")) return "pptx";
             }
         } catch (IOException | IllegalArgumentException ex) {
             // nietypowe archiwum – zdecyduje rozszerzenie
@@ -199,7 +204,8 @@ final class FileTypes {
             case "xlsx": case "xlsm": case "xltx": case "ods": return "sheet";
             case "odt": case "ott": return "odt";
             case "epub": return "epub";
-            case "pptx": case "odp": return "ppt";
+            case "pptx": case "ppsx": return "pptx";
+            case "odp": return "odp";
             default: return "zip";
         }
     }

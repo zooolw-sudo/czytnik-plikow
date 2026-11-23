@@ -400,6 +400,7 @@ public class MainActivity extends Activity {
             case "md": case "html": page = "md.html"; break;
             case "epub": page = "epub.html"; break;
             case "rtf": page = "rtf.html"; break;
+            case "pptx": case "odp": page = "slides.html"; break;
             case "image": page = "image.html"; break;
             default:
                 page = "unsupported.html";
