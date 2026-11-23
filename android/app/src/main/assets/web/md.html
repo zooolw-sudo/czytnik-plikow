@@ -65,7 +65,10 @@
       search = new DomSearch(pre, main);
     } else {
       let html;
-      if (isMd) html = marked.parse(r.text.replace(/^﻿/, ''), { gfm: true });
+      if (isMd) {
+        html = marked.parse(r.text.replace(/^\uFEFF/, ''), { gfm: true })
+          .replace(/<input[^>]*checked[^>]*>/gi, '☑ ').replace(/<input[^>]*type="checkbox"[^>]*>/gi, '☐ ');
+      }
       else {
         const t = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(r.text);
         title = t ? t[1].replace(/\s+/g, ' ').trim() : '';

@@ -19,7 +19,7 @@ const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>'
 function decodeXml(buf, forced) {
   if (forced) return decodeText(buf, forced);
   const head = new TextDecoder('latin1').decode(new Uint8Array(buf, 0, Math.min(buf.byteLength, 300)));
-  const m = /^\s*<\?xml[^>]*encoding\s*=\s*["']([\w.:-]+)["']/i.exec(head.replace(/^﻿|^ï»¿/, ''));
+  const m = /^\s*<\?xml[^>]*encoding\s*=\s*["']([\w.:-]+)["']/i.exec(head.replace(/^\uFEFF|^ï»¿/, ''));
   if (m && !/^utf-?8$/i.test(m[1])) {
     try { return { text: new TextDecoder(m[1].toLowerCase()).decode(buf), enc: m[1].toLowerCase() }; } catch (e) { /* nieznane – zgadujemy */ }
   }
@@ -178,7 +178,7 @@ UI.bar({
 function load(forcedEnc) {
   const r = decodeXml(raw, forcedEnc);
   enc = r.enc;
-  const text = r.text.replace(/^﻿/, '');
+  const text = r.text.replace(/^\uFEFF/, '');
   xmlDoc = new DOMParser().parseFromString(text, 'application/xml');
   const err = xmlDoc.getElementsByTagName('parsererror')[0];
   if (err) {

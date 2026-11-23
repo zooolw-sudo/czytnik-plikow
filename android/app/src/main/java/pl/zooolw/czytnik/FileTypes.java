@@ -72,6 +72,7 @@ final class FileTypes {
         MIME.put("ppt", "application/vnd.ms-powerpoint");
         MIME.put("zip", "application/zip");
         MIME.put("rtf", "application/rtf");
+        MIME.put("epub", "application/epub+zip");
     }
 
     static String ext(String name) {
@@ -97,6 +98,8 @@ final class FileTypes {
             case "eml": return "message/rfc822";
             case "md": return "text/markdown";
             case "html": return "text/html";
+            case "epub": return "application/epub+zip";
+            case "rtf": return "application/rtf";
             case "image": return "image/*";
             default: return "application/octet-stream";
         }
@@ -181,6 +184,7 @@ final class FileTypes {
                     String mt = readSmall(z, 200).trim();
                     if (mt.startsWith("application/vnd.oasis.opendocument.text")) return "odt";
                     if (mt.startsWith("application/vnd.oasis.opendocument.spreadsheet")) return "sheet";
+                    if (mt.startsWith("application/epub+zip")) return "epub";
                     return "odf";
                 }
                 if (nm.startsWith("word/")) return "docx";
@@ -194,6 +198,7 @@ final class FileTypes {
             case "docx": case "docm": case "dotx": return "docx";
             case "xlsx": case "xlsm": case "xltx": case "ods": return "sheet";
             case "odt": case "ott": return "odt";
+            case "epub": return "epub";
             case "pptx": case "odp": return "ppt";
             default: return "zip";
         }
